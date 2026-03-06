@@ -1,11 +1,24 @@
 import { useEffect, useRef, useState } from 'react'
 import { calculateStressScore, stressLevelFromScore } from '../utils/stressHeuristics'
 
+const VOICE_DB_MIN = 20
+const VOICE_DB_MAX = 110
+const DB_CALIBRATION_OFFSET = 92
+const DB_SMOOTHING = 0.18
+
 const initialState = {
   noiseDb: 0,
   motionMagnitude: 0,
   stressScore: 0,
   stressLevel: 'Low',
+}
+
+const clamp = (value, min, max) => Math.min(Math.max(value, min), max)
+
+const toHumanRangeDb = (rms) => {
+  const dbfs = 20 * Math.log10(rms + 1e-7)
+  const estimatedSpl = dbfs + DB_CALIBRATION_OFFSET
+  return clamp(estimatedSpl, VOICE_DB_MIN, VOICE_DB_MAX)
 }
 
 export function useDriverSensors() {
@@ -14,8 +27,10 @@ export function useDriverSensors() {
   const [error, setError] = useState('')
 
   const latestNoiseDbRef = useRef(0)
+  const smoothedNoiseDbRef = useRef(0)
   const audioContextRef = useRef(null)
   const analyzerRef = useRef(null)
+  const audioNodesRef = useRef([])
   const mediaStreamRef = useRef(null)
   const animationRef = useRef(null)
   const motionHandlerRef = useRef(null)
@@ -39,19 +54,23 @@ export function useDriverSensors() {
     if (!analyzerRef.current) return
 
     const analyser = analyzerRef.current
-    const buffer = new Uint8Array(analyser.fftSize)
+    const buffer = new Float32Array(analyser.fftSize)
 
     const tick = () => {
-      analyser.getByteTimeDomainData(buffer)
+      analyser.getFloatTimeDomainData(buffer)
 
       let sum = 0
       for (let i = 0; i < buffer.length; i += 1) {
-        const centered = (buffer[i] - 128) / 128
-        sum += centered * centered
+        sum += buffer[i] * buffer[i]
       }
 
       const rms = Math.sqrt(sum / buffer.length)
-      const noiseDb = Math.max(0, Math.round(20 * Math.log10(rms + 1e-4) + 90))
+      const instantDb = toHumanRangeDb(rms)
+      const previousDb = smoothedNoiseDbRef.current || instantDb
+      const smoothedDb = previousDb + (instantDb - previousDb) * DB_SMOOTHING
+      const noiseDb = Number(smoothedDb.toFixed(1))
+
+      smoothedNoiseDbRef.current = noiseDb
       latestNoiseDbRef.current = noiseDb
 
       setState((prev) => {
@@ -79,7 +98,7 @@ export function useDriverSensors() {
       setError('')
 
       if (!navigator.mediaDevices?.getUserMedia) {
-        throw new Error('Microphone access is not supported in this browser.')
+        throw new Error('Driver Pulse requires microphone access, but this browser does not support it.')
       }
 
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
@@ -89,35 +108,58 @@ export function useDriverSensors() {
       audioContextRef.current = audioContext
 
       const sourceNode = audioContext.createMediaStreamSource(stream)
+
+      // Focus on voice-relevant frequencies to estimate cabin speech/noise in a human-like dB range.
+      const highpass = audioContext.createBiquadFilter()
+      highpass.type = 'highpass'
+      highpass.frequency.value = 85
+
+      const presence = audioContext.createBiquadFilter()
+      presence.type = 'peaking'
+      presence.frequency.value = 3000
+      presence.Q.value = 1
+      presence.gain.value = 3
+
+      const lowpass = audioContext.createBiquadFilter()
+      lowpass.type = 'lowpass'
+      lowpass.frequency.value = 8000
+
       const analyser = audioContext.createAnalyser()
       analyser.fftSize = 2048
-      sourceNode.connect(analyser)
+
+      sourceNode.connect(highpass)
+      highpass.connect(presence)
+      presence.connect(lowpass)
+      lowpass.connect(analyser)
+
+      audioNodesRef.current = [sourceNode, highpass, presence, lowpass, analyser]
       analyzerRef.current = analyser
 
+      let motionPermissionGranted = true
       if (window.DeviceMotionEvent && typeof DeviceMotionEvent.requestPermission === 'function') {
         const permission = await DeviceMotionEvent.requestPermission()
-        if (permission !== 'granted') {
-          throw new Error('Motion sensor permission was denied.')
+        motionPermissionGranted = permission === 'granted'
+      }
+
+      if (motionPermissionGranted) {
+        const onMotion = (event) => {
+          const { x = 0, y = 0, z = 0 } = event.accelerationIncludingGravity ?? {}
+          const motionMagnitude = Number(Math.sqrt(x * x + y * y + z * z).toFixed(2))
+
+          updateStress({
+            noiseDb: latestNoiseDbRef.current,
+            motionMagnitude,
+          })
         }
+
+        window.addEventListener('devicemotion', onMotion)
+        motionHandlerRef.current = onMotion
       }
-
-      const onMotion = (event) => {
-        const { x = 0, y = 0, z = 0 } = event.accelerationIncludingGravity ?? {}
-        const motionMagnitude = Number(Math.sqrt(x * x + y * y + z * z).toFixed(2))
-
-        updateStress({
-          noiseDb: latestNoiseDbRef.current,
-          motionMagnitude,
-        })
-      }
-
-      window.addEventListener('devicemotion', onMotion)
-      motionHandlerRef.current = onMotion
 
       runAudioLoop()
       setIsMonitoring(true)
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Unable to start sensor monitoring.')
+      setError(err instanceof Error ? err.message : 'Driver Pulse was unable to start sensor monitoring.')
       stopMonitoring()
     }
   }
@@ -140,11 +182,15 @@ export function useDriverSensors() {
       mediaStreamRef.current = null
     }
 
+    audioNodesRef.current = []
+
     if (audioContextRef.current) {
       audioContextRef.current.close()
       audioContextRef.current = null
     }
 
+    smoothedNoiseDbRef.current = 0
+    latestNoiseDbRef.current = 0
     analyzerRef.current = null
   }
 
