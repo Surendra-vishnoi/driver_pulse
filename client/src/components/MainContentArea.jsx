@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { accelData } from '../mockData/accelData'
 import { convergenceData } from '../mockData/convergenceData'
+import FlaggedMomentsPanel from './FlaggedMomentsPanel'
 
 const CHART_HEIGHT = 260
 const CHART_WIDTH = 900
@@ -179,6 +180,8 @@ function MainContentArea({ isRideActive, liveNoiseDb, sensorError }) {
         <AccelerationSpikesCard />
         <AudioIntensityCard isRideActive={isRideActive} liveNoiseDb={liveNoiseDb} sensorError={sensorError} />
       </div>
+
+      <FlaggedMomentsPanel />
     </section>
   )
 }

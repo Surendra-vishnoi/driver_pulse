@@ -1,5 +1,17 @@
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:5000'
 
+export async function fetchSensorData() {
+  try {
+    const response = await fetch(`${API_BASE_URL}/api/sensor-data`)
+    if (!response.ok) throw new Error(`Sensor data request failed with status ${response.status}`)
+    const json = await response.json()
+    return json.data
+  } catch (error) {
+    console.error('[fetchSensorData]', error)
+    return null
+  }
+}
+
 export async function sendDriverTelemetry(payload) {
   try {
     const response = await fetch(`${API_BASE_URL}/api/driver/telemetry`, {
