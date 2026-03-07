@@ -4,9 +4,9 @@ function TacticalAlertBanner({ shouldShow, noiseLevel, accelSpike, onClose }) {
 
   const alertText =
     noiseLevel > 85 && accelSpike > 0.5
-      ? `Critical: High noise (${noiseLevel.toFixed(1)} dB) and acceleration spike (${accelSpike.toFixed(2)}g).`
+      ? `Critical: High cabin noise (${noiseLevel.toFixed(1)} dB) and acceleration spike (${accelSpike.toFixed(2)}g).`
       : noiseLevel > 85
-        ? `Critical: Cabin noise is elevated at ${noiseLevel.toFixed(1)} dB.`
+        ? `Critical: High cabin noise detected at ${noiseLevel.toFixed(1)} dB.`
         : `Warning: Acceleration spike detected at ${accelSpike.toFixed(2)}g.`
 
   return (
@@ -25,9 +25,12 @@ function TacticalAlertBanner({ shouldShow, noiseLevel, accelSpike, onClose }) {
               type="button"
               onClick={onClose}
               aria-label="Close alert"
-              className="absolute right-3 top-1/2 -translate-y-1/2 rounded-md border border-white/30 px-2 py-1 text-xs font-semibold text-white transition hover:bg-white/10"
+              className="absolute right-3 top-1/2 inline-flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-md border border-white/30 text-white transition hover:bg-white/10"
             >
-              X
+              <svg viewBox="0 0 20 20" fill="none" className="h-4 w-4" aria-hidden="true">
+                <path d="M5 5l10 10" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+                <path d="M15 5L5 15" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+              </svg>
             </button>
           </div>
         </motion.div>

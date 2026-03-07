@@ -7,22 +7,6 @@ import { SIMULATION_STATE } from './utils/mockData'
 
 const clamp = (value, min, max) => Math.min(max, Math.max(min, value))
 
-const getStressAuraClass = (stressScore, isAlertVisible) => {
-  if (stressScore <= 40) {
-    return 'bg-[radial-gradient(circle_at_12%_10%,rgba(52,211,153,0.14)_0%,rgba(15,23,42,0.12)_42%,transparent_70%)]'
-  }
-
-  if (stressScore <= 70) {
-    return 'bg-[radial-gradient(circle_at_12%_10%,rgba(251,191,36,0.14)_0%,rgba(15,23,42,0.12)_42%,transparent_70%)]'
-  }
-
-  if (isAlertVisible) {
-    return 'bg-[radial-gradient(circle_at_12%_10%,rgba(251,113,133,0.12)_0%,rgba(15,23,42,0.1)_42%,transparent_70%)]'
-  }
-
-  return 'bg-[radial-gradient(circle_at_12%_10%,rgba(148,163,184,0.12)_0%,rgba(15,23,42,0.1)_42%,transparent_70%)]'
-}
-
 const getSimulationSummary = () => {
   const clampedStress = clamp(SIMULATION_STATE.stressScore, 0, 100)
 
@@ -50,14 +34,14 @@ const getSimulationSummary = () => {
 
 const getAlertText = ({ noiseLevel, accelSpike }) => {
   if (noiseLevel > 85 && accelSpike > 0.5) {
-    return 'Alert. High cabin noise and acceleration spike detected.'
+    return 'Alert: high cabin noise and acceleration spike detected.'
   }
 
   if (noiseLevel > 85) {
-    return 'Alert. High cabin noise detected.'
+    return 'Alert: high cabin noise detected.'
   }
 
-  return 'Alert. Acceleration spike detected.'
+  return 'Alert: acceleration spike detected.'
 }
 
 function App() {
@@ -71,10 +55,6 @@ function App() {
 
   const hasAlertCondition = SIMULATION_STATE.noiseLevel > 85 || SIMULATION_STATE.accelSpike > 0.5
   const shouldShowAlertBanner = isRideActive && hasAlertCondition && !isAlertDismissed
-  const stressAuraClass = useMemo(
-    () => getStressAuraClass(SIMULATION_STATE.stressScore, shouldShowAlertBanner),
-    [SIMULATION_STATE.stressScore, shouldShowAlertBanner]
-  )
   const simulationSummary = useMemo(() => getSimulationSummary(), [SIMULATION_STATE.stressScore, SIMULATION_STATE.earnings, SIMULATION_STATE.noiseLevel, SIMULATION_STATE.accelSpike])
 
   const handleShiftStart = (target) => {
@@ -127,8 +107,6 @@ function App() {
 
   return (
     <div className="relative min-h-screen overflow-hidden">
-      <div className={`pointer-events-none absolute inset-x-0 bottom-0 top-16 ${stressAuraClass}`} aria-hidden="true" />
-
       <TacticalAlertBanner
         shouldShow={shouldShowAlertBanner}
         noiseLevel={SIMULATION_STATE.noiseLevel}
