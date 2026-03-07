@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import Header from '../components/Header'
 import HistoryPanel from '../components/HistoryPanel'
 import MainContentArea from '../components/MainContentArea'
+import RideSummaryModal from '../components/RideSummaryModal'
 import Sidebar from '../components/Sidebar'
 import { completeRideSummary } from '../services/stressApi'
 import { useDriverSensors } from '../hooks/useDriverSensors'
@@ -9,15 +10,50 @@ import { useDriverSensors } from '../hooks/useDriverSensors'
 const NOISE_INCIDENT_THRESHOLD_DB = 85
 const ACCEL_SPIKE_THRESHOLD = 18
 const INCIDENT_COOLDOWN_MS = 1800
+const USE_DUMMY_SUMMARY_MODAL = true
+const DUMMY_AVG_STRESS_SCORE = 91
+const DUMMY_SAFETY_SCORE = 81
 
 const createRideId = () => `RIDE-${Date.now()}-${Math.floor(Math.random() * 1000)}`
 
-function Dashboard({ dailyTarget, isShiftStarted }) {
+const clamp = (value, min, max) => Math.min(max, Math.max(min, value))
+
+const formatElapsedTime = (durationMs) => {
+  const totalSeconds = Math.max(0, Math.floor(durationMs / 1000))
+  const minutes = Math.floor(totalSeconds / 60)
+  const seconds = totalSeconds % 60
+  return `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`
+}
+
+const buildDummySummary = (currentRideId) => ({
+  rideId: currentRideId || createRideId(),
+  avgStressScore: DUMMY_AVG_STRESS_SCORE,
+  currentEarning: 864.5,
+  timeElapsed: '01:18:42',
+  distance: 34.7,
+  safetyScore: DUMMY_SAFETY_SCORE,
+  incidents: [
+    {
+      timestamp: new Date().toISOString(),
+      type: 'HARSH_DRIVING',
+      value: 22.5,
+    },
+    {
+      timestamp: new Date().toISOString(),
+      type: 'EXTREME_NOISE',
+      value: 91.3,
+    },
+  ],
+})
+
+function Dashboard({ dailyTarget, isShiftStarted, isRideActive, setIsRideActive, forceHideRideSummaryModal = false }) {
   const { noiseDb, motionMagnitude, stressScore, error, startMonitoring, stopMonitoring } = useDriverSensors()
-  const [isRideActive, setIsRideActive] = useState(false)
   const [rideId, setRideId] = useState('')
   const [incidents, setIncidents] = useState([])
+  const [rideSummary, setRideSummary] = useState(null)
   const stressSamplesRef = useRef([])
+  const distanceKmRef = useRef(0)
+  const rideStartedAtRef = useRef(null)
   const incidentCooldownRef = useRef({
     EXTREME_NOISE: 0,
     HARSH_DRIVING: 0,
@@ -28,9 +64,12 @@ function Dashboard({ dailyTarget, isShiftStarted }) {
       setIsRideActive(false)
       setRideId('')
       setIncidents([])
+      setRideSummary(null)
       stressSamplesRef.current = []
+      distanceKmRef.current = 0
+      rideStartedAtRef.current = null
     }
-  }, [isShiftStarted])
+  }, [isShiftStarted, setIsRideActive])
 
   useEffect(() => {
     if (!isShiftStarted || !isRideActive) {
@@ -51,6 +90,11 @@ function Dashboard({ dailyTarget, isShiftStarted }) {
     if (!isRideActive) return
     stressSamplesRef.current.push(stressScore)
   }, [isRideActive, stressScore])
+
+  useEffect(() => {
+    if (!isRideActive) return
+    distanceKmRef.current += clamp(motionMagnitude, 0, 40) * 0.0012
+  }, [isRideActive, motionMagnitude])
 
   useEffect(() => {
     if (!isRideActive) return
@@ -85,7 +129,10 @@ function Dashboard({ dailyTarget, isShiftStarted }) {
     if (!isRideActive) {
       setRideId(createRideId())
       setIncidents([])
+      setRideSummary(null)
       stressSamplesRef.current = []
+      distanceKmRef.current = 0
+      rideStartedAtRef.current = Date.now()
       incidentCooldownRef.current = {
         EXTREME_NOISE: 0,
         HARSH_DRIVING: 0,
@@ -96,23 +143,54 @@ function Dashboard({ dailyTarget, isShiftStarted }) {
 
     setIsRideActive(false)
 
+    if (USE_DUMMY_SUMMARY_MODAL) {
+      setRideSummary(buildDummySummary(rideId))
+      return
+    }
+
     const capturedStress = stressSamplesRef.current
     const averageStress = capturedStress.length
       ? capturedStress.reduce((total, value) => total + value, 0) / capturedStress.length
       : 0
+    const clampedStress = clamp(averageStress, 0, 100)
+    const elapsedMs = rideStartedAtRef.current ? Date.now() - rideStartedAtRef.current : 0
+    const distanceKm = Number(distanceKmRef.current.toFixed(1))
+    const safetyScore = clamp(100 - clampedStress - incidents.length * 4, 0, 100)
+    const currentEarning = Number((Number(dailyTarget ?? 0) * (0.65 + safetyScore / 250)).toFixed(2))
 
     const payload = {
       rideId,
       driverId: '4882-QX',
       targetPay: Number(dailyTarget ?? 0),
       summaryStats: {
-        avgStress: Number(averageStress.toFixed(1)),
+        avgStress: Number(clampedStress.toFixed(1)),
         totalEvents: incidents.length,
       },
       incidents,
     }
 
-    await completeRideSummary(payload)
+    setRideSummary({
+      rideId,
+      avgStressScore: Number(clampedStress.toFixed(1)),
+      currentEarning,
+      timeElapsed: formatElapsedTime(elapsedMs),
+      distance: distanceKm,
+      safetyScore,
+      incidents,
+    })
+
+    // Persist summary in the background so UI feedback is instant on ride end.
+    void completeRideSummary(payload)
+  }
+
+  const handleSummaryDone = () => {
+    setRideSummary(null)
+    setRideId('')
+    setIncidents([])
+    stressSamplesRef.current = []
+    distanceKmRef.current = 0
+    rideStartedAtRef.current = null
+    setIsRideActive(false)
   }
 
   return (
@@ -137,6 +215,18 @@ function Dashboard({ dailyTarget, isShiftStarted }) {
           <HistoryPanel />
         </section>
       </div>
+
+      <RideSummaryModal
+        isOpen={Boolean(rideSummary) && !forceHideRideSummaryModal}
+        rideId={rideSummary?.rideId ?? ''}
+        avgStressScore={rideSummary?.avgStressScore ?? 0}
+        currentEarning={rideSummary?.currentEarning ?? 0}
+        timeElapsed={rideSummary?.timeElapsed ?? '00:00'}
+        distance={rideSummary?.distance ?? 0}
+        safetyScore={rideSummary?.safetyScore ?? 0}
+        incidents={rideSummary?.incidents ?? []}
+        onDone={handleSummaryDone}
+      />
     </main>
   )
 }
