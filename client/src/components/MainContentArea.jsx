@@ -171,7 +171,7 @@ function AudioIntensityCard({ isRideActive, liveNoiseDb, sensorError }) {
   )
 }
 
-function MainContentArea({ isRideActive, liveNoiseDb, sensorError }) {
+function MainContentArea({ isRideActive, liveNoiseDb, sensorError, driverId }) {
   return (
     <section className="space-y-5">
       <MainChart />
@@ -181,7 +181,7 @@ function MainContentArea({ isRideActive, liveNoiseDb, sensorError }) {
         <AudioIntensityCard isRideActive={isRideActive} liveNoiseDb={liveNoiseDb} sensorError={sensorError} />
       </div>
 
-      <FlaggedMomentsPanel />
+      <FlaggedMomentsPanel driverId={driverId} />
     </section>
   )
 }

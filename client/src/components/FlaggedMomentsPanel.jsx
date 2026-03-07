@@ -36,7 +36,7 @@ function SeverityBadge({ severity }) {
   )
 }
 
-function FlaggedMomentsPanel() {
+function FlaggedMomentsPanel({ driverId }) {
   const [flagged, setFlagged] = useState([])
   const [stats, setStats] = useState(null)
   const [loading, setLoading] = useState(true)
@@ -74,11 +74,14 @@ function FlaggedMomentsPanel() {
     return () => { cancelled = true }
   }, [])
 
-  // Filtering
-  const filtered = flagged.filter((f) => {
+  const driverFiltered = driverId
+    ? flagged.filter((f) => f.driver_id.toLowerCase() === driverId.toLowerCase())
+    : flagged
+
+  const filtered = driverFiltered.filter((f) => {
     if (filterSeverity !== 'all' && f.severity !== filterSeverity) return false
     if (filterType !== 'all' && f.flag_type !== filterType) return false
-    if (searchTrip && !f.trip_id.toLowerCase().includes(searchTrip.toLowerCase()) && !f.driver_id.toLowerCase().includes(searchTrip.toLowerCase())) return false
+    if (searchTrip && !f.trip_id.toLowerCase().includes(searchTrip.toLowerCase())) return false
     return true
   })
 
@@ -109,21 +112,27 @@ function FlaggedMomentsPanel() {
 
   return (
     <section className="space-y-4">
+      {driverId && (
+        <div className="rounded-xl border border-sky-500/30 bg-sky-500/10 px-4 py-2 text-sm text-sky-300">
+          Showing flags for driver <span className="font-semibold text-sky-400">{driverId}</span> ({driverFiltered.length} of {flagged.length} total)
+        </div>
+      )}
+
       {stats && (
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
-          <StatCard label="Total Flags" value={stats.total} />
-          <StatCard label="High" value={stats.bySeverity.high || 0} accent="text-rose-400" />
-          <StatCard label="Medium" value={stats.bySeverity.medium || 0} accent="text-amber-400" />
-          <StatCard label="Low" value={stats.bySeverity.low || 0} accent="text-emerald-400" />
-          <StatCard label="Conflict" value={stats.byType.conflict_moment || 0} accent="text-purple-400" />
-          <StatCard label="Harsh Brake" value={stats.byType.harsh_braking || 0} accent="text-rose-400" />
+          <StatCard label="Total Flags" value={driverFiltered.length} />
+          <StatCard label="High" value={driverFiltered.filter((f) => f.severity === 'high').length} accent="text-rose-400" />
+          <StatCard label="Medium" value={driverFiltered.filter((f) => f.severity === 'medium').length} accent="text-amber-400" />
+          <StatCard label="Low" value={driverFiltered.filter((f) => f.severity === 'low').length} accent="text-emerald-400" />
+          <StatCard label="Conflict" value={driverFiltered.filter((f) => f.flag_type === 'conflict_moment').length} accent="text-purple-400" />
+          <StatCard label="Harsh Brake" value={driverFiltered.filter((f) => f.flag_type === 'harsh_braking').length} accent="text-rose-400" />
         </div>
       )}
 
       <div className="flex flex-wrap items-center gap-3 rounded-2xl border border-slate-800 bg-slate-900 px-4 py-3">
         <input
           type="text"
-          placeholder="Search trip or driver…"
+          placeholder="Search trip…"
           value={searchTrip}
           onChange={(e) => setSearchTrip(e.target.value)}
           className="rounded-lg border border-slate-700 bg-slate-950 px-3 py-1.5 text-xs text-slate-200 placeholder-slate-500 outline-none focus:border-sky-500"

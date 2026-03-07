@@ -46,7 +46,7 @@ const buildDummySummary = (currentRideId) => ({
   ],
 })
 
-function Dashboard({ dailyTarget, isShiftStarted, isRideActive, setIsRideActive, forceHideRideSummaryModal = false }) {
+function Dashboard({ dailyTarget, isShiftStarted, isRideActive, setIsRideActive, driverId, forceHideRideSummaryModal = false }) {
   const { noiseDb, motionMagnitude, stressScore, error, startMonitoring, stopMonitoring } = useDriverSensors()
   const [rideId, setRideId] = useState('')
   const [incidents, setIncidents] = useState([])
@@ -211,6 +211,7 @@ function Dashboard({ dailyTarget, isShiftStarted, isRideActive, setIsRideActive,
             liveNoiseDb={noiseDb}
             isRideActive={isRideActive}
             sensorError={error}
+            driverId={driverId}
           />
           <HistoryPanel />
         </section>

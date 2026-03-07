@@ -45,8 +45,9 @@ const getAlertText = ({ noiseLevel, accelSpike }) => {
 }
 
 function App() {
-  const [isShiftStarted, setIsShiftStarted] = useState(true)
+  const [isShiftStarted, setIsShiftStarted] = useState(false)
   const [dailyTarget, setDailyTarget] = useState(null)
+  const [driverId, setDriverId] = useState('')
   const [isRideActive, setIsRideActive] = useState(SIMULATION_STATE.isRideActive)
   const [isSummaryModalOpen, setIsSummaryModalOpen] = useState(false)
   const [isAlertDismissed, setIsAlertDismissed] = useState(false)
@@ -57,8 +58,9 @@ function App() {
   const shouldShowAlertBanner = isRideActive && hasAlertCondition && !isAlertDismissed
   const simulationSummary = useMemo(() => getSimulationSummary(), [SIMULATION_STATE.stressScore, SIMULATION_STATE.earnings, SIMULATION_STATE.noiseLevel, SIMULATION_STATE.accelSpike])
 
-  const handleShiftStart = (target) => {
+  const handleShiftStart = (target, driver) => {
     setDailyTarget(target)
+    setDriverId(driver || '')
     setIsShiftStarted(true)
   }
 
@@ -119,6 +121,7 @@ function App() {
         isShiftStarted={isShiftStarted}
         isRideActive={isRideActive}
         setIsRideActive={setIsRideActive}
+        driverId={driverId}
         forceHideRideSummaryModal
       />
 
