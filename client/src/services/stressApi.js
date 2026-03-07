@@ -21,3 +21,24 @@ export async function sendDriverTelemetry(payload) {
     }
   }
 }
+
+export async function completeRideSummary(payload) {
+  try {
+    const response = await fetch(`${API_BASE_URL}/api/rides/complete`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    })
+
+    if (!response.ok) {
+      throw new Error(`Ride completion failed with status ${response.status}`)
+    }
+
+    return await response.json()
+  } catch (error) {
+    return {
+      ok: false,
+      error: error instanceof Error ? error.message : 'Unknown ride completion error',
+    }
+  }
+}

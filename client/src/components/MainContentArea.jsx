@@ -1,9 +1,11 @@
+import { useEffect, useRef, useState } from 'react'
 import { accelData } from '../mockData/accelData'
-import { audioData } from '../mockData/audioData'
 import { convergenceData } from '../mockData/convergenceData'
 
 const CHART_HEIGHT = 260
 const CHART_WIDTH = 900
+const AUDIO_POINTS = 42
+const NOMINAL_AUDIO_BASELINE = 56
 
 function createPath(values, width, height, minValue = 0, maxValue = 100) {
   if (!values.length) return ''
@@ -107,13 +109,47 @@ function AccelerationSpikesCard() {
   )
 }
 
-function AudioIntensityCard({ liveNoiseDb, sensorError }) {
+function AudioIntensityCard({ isRideActive, liveNoiseDb, sensorError }) {
   const width = 420
   const height = 170
-  const wavePath = createPath(audioData, width, height, 30, 60)
-  const hasLiveNoise = Number.isFinite(liveNoiseDb) && liveNoiseDb > 0
+  const [waveSeries, setWaveSeries] = useState(() => Array.from({ length: AUDIO_POINTS }, () => NOMINAL_AUDIO_BASELINE))
+  const noiseRef = useRef(liveNoiseDb)
+  const phaseRef = useRef(0)
+
+  useEffect(() => {
+    noiseRef.current = liveNoiseDb
+  }, [liveNoiseDb])
+
+  useEffect(() => {
+    if (!isRideActive) {
+      setWaveSeries(Array.from({ length: AUDIO_POINTS }, () => NOMINAL_AUDIO_BASELINE))
+      return
+    }
+
+    const interval = setInterval(() => {
+      phaseRef.current += 0.6
+
+      setWaveSeries((prev) => {
+        const currentNoise = Number.isFinite(noiseRef.current) ? noiseRef.current : 42
+        const normalized = ((currentNoise - 30) / 80) * 100
+        const clamped = Math.min(Math.max(normalized, 0), 100)
+        const oscillation = Math.sin(phaseRef.current) * 3.2
+        const target = Math.min(Math.max(clamped + oscillation, 0), 100)
+        const last = prev[prev.length - 1] ?? NOMINAL_AUDIO_BASELINE
+        const next = Number((last + (target - last) * 0.35).toFixed(2))
+        return [...prev.slice(1), next]
+      })
+    }, 100)
+
+    return () => {
+      clearInterval(interval)
+    }
+  }, [isRideActive])
+
+  const wavePath = createPath(waveSeries, width, height, 0, 100)
+  const hasLiveNoise = isRideActive && Number.isFinite(liveNoiseDb) && liveNoiseDb > 0
   const displayDb = hasLiveNoise ? liveNoiseDb : 42
-  const statusLabel = hasLiveNoise ? 'NOMINAL' : 'DEFAULT'
+  const statusLabel = hasLiveNoise ? 'ACTIVE' : 'NOMINAL'
 
   return (
     <section className="rounded-2xl border border-slate-800 bg-slate-900 p-5">
@@ -123,7 +159,7 @@ function AudioIntensityCard({ liveNoiseDb, sensorError }) {
           {statusLabel} {displayDb.toFixed(1)}dB
         </span>
       </div>
-      {sensorError ? <p className="mt-1 text-xs text-amber-300">Microphone permission not granted. Showing default dB.</p> : null}
+      {sensorError ? <p className="mt-1 text-xs text-amber-300">Microphone permission not granted. Showing fallback dB.</p> : null}
 
       <div className="mt-4 h-[170px] rounded-xl border border-slate-800 bg-slate-950/70 p-3">
         <svg viewBox={`0 0 ${width} ${height}`} className="h-full w-full" preserveAspectRatio="none">
@@ -134,14 +170,14 @@ function AudioIntensityCard({ liveNoiseDb, sensorError }) {
   )
 }
 
-function MainContentArea({ liveNoiseDb, sensorError }) {
+function MainContentArea({ isRideActive, liveNoiseDb, sensorError }) {
   return (
     <section className="space-y-5">
       <MainChart />
 
       <div className="grid gap-5 xl:grid-cols-2">
         <AccelerationSpikesCard />
-        <AudioIntensityCard liveNoiseDb={liveNoiseDb} sensorError={sensorError} />
+        <AudioIntensityCard isRideActive={isRideActive} liveNoiseDb={liveNoiseDb} sensorError={sensorError} />
       </div>
     </section>
   )

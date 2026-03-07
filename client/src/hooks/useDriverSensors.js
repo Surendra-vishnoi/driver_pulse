@@ -1,10 +1,14 @@
 import { useEffect, useRef, useState } from 'react'
-import { calculateStressScore, stressLevelFromScore } from '../utils/stressHeuristics'
+import { normalizeDb, normalizeMotion, stressLevelFromScore } from '../utils/stressHeuristics'
 
 const VOICE_DB_MIN = 20
 const VOICE_DB_MAX = 110
 const DB_CALIBRATION_OFFSET = 92
 const DB_SMOOTHING = 0.18
+const SAMPLE_RATE_HZ = 10
+const SAMPLE_WINDOW_SIZE = 30
+const SAMPLE_INTERVAL_MS = 1000 / SAMPLE_RATE_HZ
+const DISPLAY_LERP_FACTOR = 0.16
 
 const initialState = {
   noiseDb: 0,
@@ -14,6 +18,17 @@ const initialState = {
 }
 
 const clamp = (value, min, max) => Math.min(Math.max(value, min), max)
+
+const average = (values) => {
+  if (!values.length) return 0
+  return values.reduce((total, value) => total + value, 0) / values.length
+}
+
+const calculateContinuousStressScore = ({ noiseDb, motionMagnitude }) => {
+  const noiseScore = normalizeDb(noiseDb)
+  const motionScore = normalizeMotion(motionMagnitude)
+  return clamp(noiseScore * 0.6 + motionScore * 0.4, 0, 100)
+}
 
 const toHumanRangeDb = (rms) => {
   const dbfs = 20 * Math.log10(rms + 1e-7)
@@ -26,8 +41,15 @@ export function useDriverSensors() {
   const [isMonitoring, setIsMonitoring] = useState(false)
   const [error, setError] = useState('')
 
-  const latestNoiseDbRef = useRef(0)
-  const smoothedNoiseDbRef = useRef(0)
+  const latestMotionRef = useRef(0)
+  const latestInstantNoiseDbRef = useRef(0)
+  const targetNoiseDbRef = useRef(0)
+  const targetStressScoreRef = useRef(0)
+  const displayedNoiseDbRef = useRef(0)
+  const displayedStressScoreRef = useRef(0)
+  const noiseSamplesRef = useRef([])
+  const stressSamplesRef = useRef([])
+  const lastSampleTimeRef = useRef(0)
   const audioContextRef = useRef(null)
   const analyzerRef = useRef(null)
   const audioNodesRef = useRef([])
@@ -41,14 +63,6 @@ export function useDriverSensors() {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
-
-  const updateStress = ({ noiseDb, motionMagnitude }) => {
-    const stressScore = calculateStressScore({ noiseDb, motionMagnitude })
-    const stressLevel = stressLevelFromScore(stressScore)
-    latestNoiseDbRef.current = noiseDb
-
-    setState({ noiseDb, motionMagnitude, stressScore, stressLevel })
-  }
 
   const runAudioLoop = () => {
     if (!analyzerRef.current) return
@@ -66,25 +80,48 @@ export function useDriverSensors() {
 
       const rms = Math.sqrt(sum / buffer.length)
       const instantDb = toHumanRangeDb(rms)
-      const previousDb = smoothedNoiseDbRef.current || instantDb
+      const previousDb = latestInstantNoiseDbRef.current || instantDb
       const smoothedDb = previousDb + (instantDb - previousDb) * DB_SMOOTHING
-      const noiseDb = Number(smoothedDb.toFixed(1))
+      latestInstantNoiseDbRef.current = smoothedDb
 
-      smoothedNoiseDbRef.current = noiseDb
-      latestNoiseDbRef.current = noiseDb
+      const now = performance.now()
+      if (now - lastSampleTimeRef.current >= SAMPLE_INTERVAL_MS) {
+        lastSampleTimeRef.current = now
 
-      setState((prev) => {
-        const stressScore = calculateStressScore({
-          noiseDb,
-          motionMagnitude: prev.motionMagnitude,
+        noiseSamplesRef.current.push(smoothedDb)
+        if (noiseSamplesRef.current.length > SAMPLE_WINDOW_SIZE) {
+          noiseSamplesRef.current.shift()
+        }
+
+        const avgNoiseDb = average(noiseSamplesRef.current)
+        targetNoiseDbRef.current = avgNoiseDb
+
+        const continuousStress = calculateContinuousStressScore({
+          noiseDb: avgNoiseDb,
+          motionMagnitude: latestMotionRef.current,
         })
 
-        return {
-          noiseDb,
-          motionMagnitude: prev.motionMagnitude,
-          stressScore,
-          stressLevel: stressLevelFromScore(stressScore),
+        stressSamplesRef.current.push(continuousStress)
+        if (stressSamplesRef.current.length > SAMPLE_WINDOW_SIZE) {
+          stressSamplesRef.current.shift()
         }
+
+        targetStressScoreRef.current = average(stressSamplesRef.current)
+      }
+
+      displayedNoiseDbRef.current +=
+        (targetNoiseDbRef.current - displayedNoiseDbRef.current) * DISPLAY_LERP_FACTOR
+      displayedStressScoreRef.current +=
+        (targetStressScoreRef.current - displayedStressScoreRef.current) * DISPLAY_LERP_FACTOR
+
+      const displayedNoiseDb = Number(displayedNoiseDbRef.current.toFixed(1))
+      const displayedStressScore = Number(displayedStressScoreRef.current.toFixed(1))
+
+      setState({
+        noiseDb: displayedNoiseDb,
+        motionMagnitude: Number(latestMotionRef.current.toFixed(2)),
+        stressScore: displayedStressScore,
+        stressLevel: stressLevelFromScore(displayedStressScore),
       })
 
       animationRef.current = requestAnimationFrame(tick)
@@ -145,11 +182,7 @@ export function useDriverSensors() {
         const onMotion = (event) => {
           const { x = 0, y = 0, z = 0 } = event.accelerationIncludingGravity ?? {}
           const motionMagnitude = Number(Math.sqrt(x * x + y * y + z * z).toFixed(2))
-
-          updateStress({
-            noiseDb: latestNoiseDbRef.current,
-            motionMagnitude,
-          })
+          latestMotionRef.current = motionMagnitude
         }
 
         window.addEventListener('devicemotion', onMotion)
@@ -189,9 +222,17 @@ export function useDriverSensors() {
       audioContextRef.current = null
     }
 
-    smoothedNoiseDbRef.current = 0
-    latestNoiseDbRef.current = 0
+    latestMotionRef.current = 0
+    latestInstantNoiseDbRef.current = 0
+    targetNoiseDbRef.current = 0
+    targetStressScoreRef.current = 0
+    displayedNoiseDbRef.current = 0
+    displayedStressScoreRef.current = 0
+    noiseSamplesRef.current = []
+    stressSamplesRef.current = []
+    lastSampleTimeRef.current = 0
     analyzerRef.current = null
+    setState(initialState)
   }
 
   return {
