@@ -1,0 +1,24 @@
+# ── Core Data ──────────────────────────────
+pandas==2.2.2
+numpy==1.26.4
+openpyxl==3.1.2          # read .xlsx files
+python-dateutil==2.9.0   # robust datetime parsing
+
+# ── Validation ─────────────────────────────
+pydantic==2.7.1           # schema validation for each table
+
+# ── API & Web Framework ────────────────────
+fastapi==0.111.0
+uvicorn==0.29.0
+python-multipart==0.0.9   # file uploads
+requests==2.31.0          # HTTP client for integration
+
+# ── Visualization ──────────────────────────
+matplotlib==3.8.3         # earnings projection charts
+
+# ── Dev / Testing ──────────────────────────
+pytest==8.2.0
+pytest-cov==5.0.0
+
+# ── Logging ────────────────────────────────
+# Use Python standard library `logging` (no pip package required)

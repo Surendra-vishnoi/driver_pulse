@@ -1,5 +1,26 @@
-function Sidebar() {
-  const goal = 75
+const clamp = (value, min, max) => Math.min(max, Math.max(min, value))
+
+function Sidebar({ stats, onOpenLogs }) {
+  const currentEarnings = Number(stats?.current_earnings) || 0
+  const targetEarnings = Math.max(1, Number(stats?.target_earnings) || 1500)
+  const rawPercent = (currentEarnings / targetEarnings) * 100
+  const goal = clamp(rawPercent, 0, 100)
+
+  const paceBand = String(stats?.pace_band || '').toLowerCase()
+  const statusLabel =
+    paceBand === 'ahead' ? 'Ahead' :
+    paceBand === 'on_track' ? 'On Track' :
+    paceBand === 'slightly_behind' ? 'Slightly Behind' :
+    paceBand === 'at_risk' ? 'At Risk' :
+    paceBand === 'off_track' ? 'Off Track' :
+    'Tracking'
+
+  const statusColor =
+    paceBand === 'at_risk' || paceBand === 'off_track'
+      ? 'text-rose-400'
+      : paceBand === 'slightly_behind' || paceBand === 'too_early'
+        ? 'text-amber-400'
+        : 'text-sky-400'
 
   return (
     <aside className="flex h-full flex-col rounded-2xl border border-slate-800 bg-slate-900 p-5">
@@ -8,6 +29,7 @@ function Sidebar() {
           <button
             key={item}
             type="button"
+            onClick={item === 'Logs' ? onOpenLogs : undefined}
             className="flex w-full items-center justify-between rounded-xl border border-slate-800 bg-slate-950 px-4 py-3 text-sm font-medium text-slate-300 transition hover:border-sky-400/40 hover:text-sky-400"
           >
             <span>{item}</span>
@@ -27,19 +49,19 @@ function Sidebar() {
             }}
           >
             <div className="grid h-14 w-14 place-items-center rounded-full bg-slate-950 text-sm font-semibold text-slate-100">
-              {goal}%
+              {Math.round(rawPercent)}%
             </div>
           </div>
 
           <div>
             <p className="text-xs uppercase tracking-[0.2em] text-slate-500">Daily Goal</p>
-            <p className="mt-1 text-lg font-semibold text-sky-400">On Track</p>
+            <p className={`mt-1 text-lg font-semibold ${statusColor}`}>{statusLabel}</p>
           </div>
         </div>
 
         <div className="mt-5 rounded-xl border border-slate-800 bg-slate-900/70 p-3">
           <p className="text-xs uppercase tracking-[0.2em] text-slate-400">Earned Revenue</p>
-          <p className="mt-2 text-2xl font-semibold text-slate-100">$842.50</p>
+          <p className="mt-2 text-2xl font-semibold text-slate-100">Rs {Math.round(currentEarnings).toLocaleString()}</p>
         </div>
       </section>
 

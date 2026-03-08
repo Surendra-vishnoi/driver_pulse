@@ -1,4 +1,5 @@
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:5000'
+const EARNINGS_API_BASE_URL = import.meta.env.VITE_EARNINGS_API_BASE_URL ?? 'http://127.0.0.1:8000'
 
 export async function fetchSensorData() {
   try {
@@ -52,5 +53,80 @@ export async function completeRideSummary(payload) {
       ok: false,
       error: error instanceof Error ? error.message : 'Unknown ride completion error',
     }
+  }
+}
+
+export async function fetchEarningsProjection(driverId, points = 20) {
+  try {
+    const response = await fetch(
+      `${EARNINGS_API_BASE_URL}/drivers/${encodeURIComponent(driverId)}/projection?points=${points}`,
+    )
+
+    if (!response.ok) {
+      throw new Error(`Earnings projection request failed with status ${response.status}`)
+    }
+
+    return await response.json()
+  } catch (error) {
+    console.error('[fetchEarningsProjection]', error)
+    return null
+  }
+}
+
+export async function fetchEarningsDashboardData(driverId) {
+  try {
+    const response = await fetch(
+      `${EARNINGS_API_BASE_URL}/drivers/${encodeURIComponent(driverId)}/dashboard/data`,
+    )
+
+    if (!response.ok) {
+      throw new Error(`Earnings dashboard request failed with status ${response.status}`)
+    }
+
+    return await response.json()
+  } catch (error) {
+    console.error('[fetchEarningsDashboardData]', error)
+    return null
+  }
+}
+
+export async function ensureEarningsDriver(driverId) {
+  try {
+    const response = await fetch(`${EARNINGS_API_BASE_URL}/drivers/login`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ driver_id: driverId }),
+    })
+
+    if (!response.ok) {
+      throw new Error(`Earnings driver login failed with status ${response.status}`)
+    }
+
+    return await response.json()
+  } catch (error) {
+    console.error('[ensureEarningsDriver]', error)
+    return null
+  }
+}
+
+export async function postEarningsTrip(driverId, tripPayload) {
+  try {
+    const response = await fetch(
+      `${EARNINGS_API_BASE_URL}/drivers/${encodeURIComponent(driverId)}/trips`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(tripPayload),
+      },
+    )
+
+    if (!response.ok) {
+      throw new Error(`Earnings trip push failed with status ${response.status}`)
+    }
+
+    return await response.json()
+  } catch (error) {
+    console.error('[postEarningsTrip]', error)
+    return null
   }
 }

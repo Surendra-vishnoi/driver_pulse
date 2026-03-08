@@ -1,0 +1,2 @@
+driver_id,name,current_earnings,target_earnings,current_hours,shift_duration_hours,remaining_hours,earnings_gap,pace_score,pace_band,projected_earnings,driver_message,trips_count
+DRV001,Rajesh Singh,1650.0,1500.0,0.00116306,10.0,9.99883694,0,,too_early,1650.0,Shift just started — not enough data to score yet.,5
