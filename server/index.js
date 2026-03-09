@@ -155,7 +155,7 @@ app.use(["/drivers", "/export", "/docs", "/redoc"], proxyToPythonApi);
 app.get("/openapi.json", proxyToPythonApi);
 
 app.use(express.static(CLIENT_DIST_DIR));
-app.get("*", (req, res, next) => {
+app.use((req, res, next) => {
   const pathPrefix = req.path || "";
   if (
     pathPrefix.startsWith("/api") ||
