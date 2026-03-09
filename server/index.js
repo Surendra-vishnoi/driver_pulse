@@ -12,8 +12,10 @@ dotenv.config();
 const app = express();
 const PORT = process.env.PORT || 5000;
 const MONGODB_URI = process.env.MONGODB_URI || "mongodb://127.0.0.1:27017/driver_pulse";
+const PYTHON_API_BASE_URL = process.env.PYTHON_API_BASE_URL || "http://127.0.0.1:8000";
 
 const DATA_DIR = path.join(__dirname, "..", "data");
+const CLIENT_DIST_DIR = path.join(__dirname, "..", "client", "dist");
 const rideEndEvents = [];
 
 function loadCsv(filePath) {
@@ -23,6 +25,44 @@ function loadCsv(filePath) {
 
 app.use(cors());
 app.use(express.json());
+
+async function proxyToPythonApi(req, res) {
+  try {
+    const upstreamUrl = `${PYTHON_API_BASE_URL}${req.originalUrl}`;
+    const headers = { ...req.headers };
+    delete headers.host;
+    delete headers["content-length"];
+
+    const options = {
+      method: req.method,
+      headers,
+    };
+
+    if (!["GET", "HEAD"].includes(req.method) && req.body && Object.keys(req.body).length > 0) {
+      options.body = JSON.stringify(req.body);
+      options.headers["content-type"] = "application/json";
+    }
+
+    const upstreamResponse = await fetch(upstreamUrl, options);
+    const bodyText = await upstreamResponse.text();
+
+    res.status(upstreamResponse.status);
+    upstreamResponse.headers.forEach((value, key) => {
+      if (key.toLowerCase() === "content-length" || key.toLowerCase() === "transfer-encoding") {
+        return;
+      }
+      res.setHeader(key, value);
+    });
+
+    return res.send(bodyText);
+  } catch (error) {
+    return res.status(502).json({
+      success: false,
+      message: "Python API proxy failed",
+      error: error.message,
+    });
+  }
+}
 
 app.post("/api/rides/end-meta", (req, res) => {
   const payload = req.body || {};
@@ -109,6 +149,25 @@ app.get("/api/sensor-data", (req, res) => {
   } catch (error) {
     res.status(500).json({ success: false, message: "Failed to load sensor data.", error: error.message });
   }
+});
+
+app.use(["/drivers", "/export", "/docs", "/redoc"], proxyToPythonApi);
+app.get("/openapi.json", proxyToPythonApi);
+
+app.use(express.static(CLIENT_DIST_DIR));
+app.get("*", (req, res, next) => {
+  const pathPrefix = req.path || "";
+  if (
+    pathPrefix.startsWith("/api") ||
+    pathPrefix.startsWith("/drivers") ||
+    pathPrefix.startsWith("/export") ||
+    pathPrefix.startsWith("/docs") ||
+    pathPrefix.startsWith("/redoc") ||
+    pathPrefix === "/openapi.json"
+  ) {
+    return next();
+  }
+  return res.sendFile(path.join(CLIENT_DIST_DIR, "index.html"));
 });
 
 mongoose
