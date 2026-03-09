@@ -1,0 +1,45 @@
+INFO | Trip recorded: DRV188 earned ₹70 (total: ₹70)
+INFO | Trip recorded: DRV188 earned ₹80 (total: ₹150)
+INFO | Trip recorded: DRV188 earned ₹90 (total: ₹240)
+INFO | Trip recorded: DRV188 earned ₹90 (total: ₹330)
+INFO | ✅ Seeded DRV188 with simulated trip history
+INFO | ✅ FastAPI app initialized
+INFO | 🚀 Starting Driver Pulse API on 127.0.0.1:8000
+INFO | 📚 API Docs: http://127.0.0.1:8000/docs
+INFO | 📊 Health Check: http://127.0.0.1:8000/health
+INFO | Trip recorded: DRV188 earned ₹70 (total: ₹70)
+INFO | Trip recorded: DRV188 earned ₹80 (total: ₹150)
+INFO | Trip recorded: DRV188 earned ₹90 (total: ₹240)
+INFO | Trip recorded: DRV188 earned ₹90 (total: ₹330)
+INFO | ✅ Seeded DRV188 with simulated trip history
+INFO | ✅ FastAPI app initialized
+INFO:     127.0.0.1:49879 - "GET /drivers/DRV188/dashboard/data HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54245 - "GET /drivers/DRV188/projection?points=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54003 - "GET /drivers/DRV188/dashboard/data HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59880 - "GET /drivers/DRV188/projection?points=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54003 - "GET /drivers/DRV188/dashboard/data HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59880 - "GET /drivers/DRV188/projection?points=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55013 - "GET /drivers/DRV188/dashboard/data HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64049 - "GET /drivers/DRV188/projection?points=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56480 - "GET /drivers/DRV188/dashboard/data HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63370 - "GET /drivers/DRV188/projection?points=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58820 - "GET /drivers/DRV188/dashboard/data HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54173 - "GET /drivers/DRV188/projection?points=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49284 - "GET /drivers/DRV188/dashboard/data HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53208 - "GET /drivers/DRV188/projection?points=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60500 - "GET /drivers/DRV188/dashboard/data HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58697 - "GET /drivers/DRV188/projection?points=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52805 - "GET /drivers/DRV188/dashboard/data HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64550 - "GET /drivers/DRV188/projection?points=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52805 - "GET /drivers/DRV188/dashboard/data HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64550 - "GET /drivers/DRV188/projection?points=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56265 - "GET /drivers/DRV188/dashboard/data HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49589 - "GET /drivers/DRV188/projection?points=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58729 - "GET /drivers/DRV188/dashboard/data HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54720 - "GET /drivers/DRV188/projection?points=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56676 - "GET /drivers/DRV188/dashboard/data HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51278 - "GET /drivers/DRV188/projection?points=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51250 - "GET /drivers/DRV188/trips HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56676 - "GET /drivers/DRV188/dashboard/data HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51250 - "GET /drivers/DRV188/trips HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59132 - "GET /drivers/DRV188/projection?points=20 HTTP/1.1" 200 OK

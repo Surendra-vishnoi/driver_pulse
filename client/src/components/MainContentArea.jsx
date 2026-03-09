@@ -1,7 +1,12 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { earningsFallback } from '../mockData/earningsFallback'
 import FlaggedMomentsPanel from './FlaggedMomentsPanel'
-import { fetchEarningsDashboardData, fetchEarningsProjection, fetchSensorData } from '../services/stressApi'
+import {
+  fetchEarningsDashboardData,
+  fetchEarningsProjection,
+  fetchEarningsTrips,
+  fetchSensorData,
+} from '../services/stressApi'
 
 const CHART_HEIGHT = 260
 const CHART_WIDTH = 900
@@ -220,9 +225,10 @@ function MainChart({ driverId, onDashboardUpdate }) {
     const activeDriverId = driverId || 'DRV001'
 
     const loadProjection = async () => {
-      const [dashboard, projection] = await Promise.all([
+      const [dashboard, projection, trips] = await Promise.all([
         fetchEarningsDashboardData(activeDriverId),
         fetchEarningsProjection(activeDriverId, 20),
+        fetchEarningsTrips(activeDriverId),
       ])
 
       if (dashboard) {
@@ -241,8 +247,19 @@ function MainChart({ driverId, onDashboardUpdate }) {
         })
 
         setProjectionTimeline(projection?.timeline || [])
+        const cumulativeFromTrips = (trips?.trips || [])
+          .map((trip) => Number(trip.trip_earnings) || 0)
+          .reduce((acc, value) => {
+            const previous = acc.length ? acc[acc.length - 1] : 0
+            acc.push(previous + Math.max(0, value))
+            return acc
+          }, [])
+          .slice(-REAL_HISTORY_LIMIT)
+
         setRealHistory((prev) => {
-          const next = [...prev, Number(dashboard.current_earnings) || 0]
+          const next = cumulativeFromTrips.length
+            ? cumulativeFromTrips
+            : [...prev, Number(dashboard.current_earnings) || 0]
           const trimmed = next.slice(-REAL_HISTORY_LIMIT)
 
           if (typeof window !== 'undefined') {

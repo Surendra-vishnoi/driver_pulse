@@ -170,3 +170,20 @@ export async function postEarningsTrip(driverId, tripPayload) {
     return null
   }
 }
+
+export async function fetchEarningsTrips(driverId) {
+  try {
+    const response = await fetch(
+      `${EARNINGS_API_BASE_URL}/drivers/${encodeURIComponent(driverId)}/trips`,
+    )
+
+    if (!response.ok) {
+      throw new Error(`Earnings trips request failed with status ${response.status}`)
+    }
+
+    return await response.json()
+  } catch (error) {
+    console.error('[fetchEarningsTrips]', error)
+    return null
+  }
+}

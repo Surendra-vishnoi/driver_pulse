@@ -9,7 +9,7 @@ from pathlib import Path
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 import logging
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Optional, List, Dict
 from fastapi import FastAPI, HTTPException, UploadFile, File
 from fastapi.responses import HTMLResponse, FileResponse, JSONResponse
@@ -162,6 +162,55 @@ app.add_middleware(
 
 # Initialize tracker
 tracker = TripEarningsTracker()
+
+
+def _seed_driver_drv188() -> None:
+    """Seed DRV188 with gradual trip progression for demo/live-fetch UX."""
+    driver_id = "DRV188"
+
+    if driver_id in tracker.driver_earnings and tracker.driver_earnings[driver_id].get("trips_count", 0) > 0:
+        return
+
+    now = datetime.now()
+    # Cumulative progression is 70 -> 150 -> 240 -> 330 (requested UX shape).
+    trip_templates = [
+        {"trip_id": "DRV188_SEED_001", "trip_earnings": 70, "trip_duration_min": 16, "fare": 70, "surge_multiplier": 1.0, "minutes_ago": 210},
+        {"trip_id": "DRV188_SEED_002", "trip_earnings": 80, "trip_duration_min": 18, "fare": 78, "surge_multiplier": 1.0, "minutes_ago": 165},
+        {"trip_id": "DRV188_SEED_003", "trip_earnings": 90, "trip_duration_min": 20, "fare": 86, "surge_multiplier": 1.05, "minutes_ago": 118},
+        {"trip_id": "DRV188_SEED_004", "trip_earnings": 90, "trip_duration_min": 21, "fare": 84, "surge_multiplier": 1.08, "minutes_ago": 72},
+        {"trip_id": "DRV188_SEED_005", "trip_earnings": 120, "trip_duration_min": 24, "fare": 112, "surge_multiplier": 1.1, "minutes_ago": 30},
+    ]
+
+    tracker.driver_earnings[driver_id] = {
+        "current_earnings": 0,
+        "target_earnings": 1500,
+        "shift_duration_hours": 8,
+        "current_hours": 0,
+        "start_time": (now - timedelta(hours=4)).isoformat(),
+        "name": "Driver DRV188",
+        "trips_count": 0,
+        "velocity_log": [],
+        "trip_time_hours": 0.0,
+    }
+
+    for template in sorted(trip_templates, key=lambda row: row["minutes_ago"], reverse=True):
+        trip_timestamp = (now - timedelta(minutes=template["minutes_ago"]))
+        tracker.record_trip(
+            driver_id,
+            {
+                "trip_id": template["trip_id"],
+                "trip_earnings": template["trip_earnings"],
+                "trip_duration_min": template["trip_duration_min"],
+                "fare": template["fare"],
+                "surge_multiplier": template["surge_multiplier"],
+                "timestamp": trip_timestamp.isoformat(),
+            },
+        )
+
+    logger.info("✅ Seeded DRV188 with simulated trip history")
+
+
+_seed_driver_drv188()
 
 logger.info("✅ FastAPI app initialized")
 
