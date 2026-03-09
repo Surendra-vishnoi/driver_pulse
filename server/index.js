@@ -11,7 +11,7 @@ dotenv.config();
 
 const app = express();
 const PORT = process.env.PORT || 5000;
-const MONGODB_URI = process.env.MONGODB_URI || "mongodb://127.0.0.1:27017/driver_pulse";
+const mongoUri = process.env.MONGO_URI || "mongodb://127.0.0.1:27017/driverpulse";
 const PYTHON_API_BASE_URL = process.env.PYTHON_API_BASE_URL || "http://127.0.0.1:8000";
 
 const DATA_DIR = path.join(__dirname, "..", "data");
@@ -171,9 +171,9 @@ app.use((req, res, next) => {
 });
 
 mongoose
-  .connect(MONGODB_URI)
+  .connect(mongoUri)
   .then(() => {
-    console.log("MongoDB connected.");
+    console.log("MongoDB connected");
     app.listen(PORT, () => {
       console.log(`Server running on port ${PORT}`);
     });
