@@ -1,7 +1,7 @@
 const clamp = (value, min, max) => Math.min(max, Math.max(min, value))
 
-function Sidebar({ stats, onOpenLogs }) {
-  const currentEarnings = Number(stats?.current_earnings) || 0
+function Sidebar({ stats, onOpenConsole, onOpenLogs }) {
+  const currentEarnings = Number(stats?.effective_current_earnings ?? stats?.current_earnings) || 0
   const targetEarnings = Math.max(1, Number(stats?.target_earnings) || 1500)
   const rawPercent = (currentEarnings / targetEarnings) * 100
   const goal = clamp(rawPercent, 0, 100)
@@ -29,7 +29,13 @@ function Sidebar({ stats, onOpenLogs }) {
           <button
             key={item}
             type="button"
-            onClick={item === 'Logs' ? onOpenLogs : undefined}
+            onClick={
+              item === 'Console'
+                ? onOpenConsole
+                : item === 'Logs'
+                  ? onOpenLogs
+                  : undefined
+            }
             className="flex w-full items-center justify-between rounded-xl border border-slate-800 bg-slate-950 px-4 py-3 text-sm font-medium text-slate-300 transition hover:border-sky-400/40 hover:text-sky-400"
           >
             <span>{item}</span>

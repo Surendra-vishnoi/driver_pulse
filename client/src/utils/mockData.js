@@ -1,5 +1,5 @@
 export const SIMULATION_STATE = {
-  isRideActive: true,
+  isRideActive: false,
   noiseLevel: 92,
   stressScore: 78,
   accelSpike: 0.25,

@@ -4,7 +4,8 @@ import HistoryPanel from '../components/HistoryPanel'
 import MainContentArea from '../components/MainContentArea'
 import RideSummaryModal from '../components/RideSummaryModal'
 import Sidebar from '../components/Sidebar'
-import { completeRideSummary, ensureEarningsDriver, fetchEarningsDashboardData, postEarningsTrip } from '../services/stressApi'
+import ConsoleOverlay from '../components/ConsoleOverlay'
+import { completeRideSummary, ensureEarningsDriver, postEarningsTrip, sendRideEndMetadata } from '../services/stressApi'
 import { useDriverSensors } from '../hooks/useDriverSensors'
 
 const NOISE_INCIDENT_THRESHOLD_DB = 85
@@ -14,7 +15,6 @@ const USE_DUMMY_SUMMARY_MODAL = true
 const DUMMY_AVG_STRESS_SCORE = 91
 const DUMMY_SAFETY_SCORE = 81
 const MAX_NOTIFICATION_HISTORY = 200
-const SIDEBAR_REFRESH_MS = 1 * 60 * 1000
 
 const DUMMY_NOTIFICATIONS = [
   {
@@ -62,6 +62,17 @@ const formatElapsedTime = (durationMs) => {
   return `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`
 }
 
+const buildRideAlertMessages = (rideIncidents = []) => {
+  const hasNoise = rideIncidents.some((incident) => incident?.type === 'EXTREME_NOISE')
+  const hasHarsh = rideIncidents.some((incident) => incident?.type === 'HARSH_DRIVING')
+  const alerts = []
+
+  if (hasNoise) alerts.push('High cabin noise detected during ride.')
+  if (hasHarsh) alerts.push('Harsh driving pattern detected during ride.')
+
+  return alerts
+}
+
 const buildDummySummary = (currentRideId) => ({
   rideId: currentRideId || createRideId(),
   avgStressScore: DUMMY_AVG_STRESS_SCORE,
@@ -91,6 +102,7 @@ function Dashboard({ dailyTarget, isShiftStarted, isRideActive, setIsRideActive,
   const [notifications, setNotifications] = useState(DUMMY_NOTIFICATIONS)
   const [liveDriverStats, setLiveDriverStats] = useState(null)
   const [isLogsOverlayOpen, setIsLogsOverlayOpen] = useState(false)
+  const [isConsoleOverlayOpen, setIsConsoleOverlayOpen] = useState(false)
   const stressSamplesRef = useRef([])
   const distanceKmRef = useRef(0)
   const rideStartedAtRef = useRef(null)
@@ -116,15 +128,18 @@ function Dashboard({ dailyTarget, isShiftStarted, isRideActive, setIsRideActive,
 
     setLiveDriverStats(dashboard)
 
+    const effectiveCurrent = Number(dashboard.effective_current_earnings ?? dashboard.current_earnings) || 0
+    const effectiveProjected = Number(dashboard.effective_projected_earnings ?? dashboard.projected_earnings) || 0
+
     let message = String(dashboard.driver_message || '').trim()
 
     if (dashboard.pace_band === 'too_early' && Array.isArray(dashboard.projectionTimeline) && dashboard.projectionTimeline.length >= 2) {
       const timeline = dashboard.projectionTimeline
       const midPoint = timeline[Math.floor(timeline.length / 2)]
       const endPoint = timeline[timeline.length - 1]
-      const current = Math.round(Number(dashboard.current_earnings) || 0)
+      const current = Math.round(effectiveCurrent)
       const midProjected = Math.round(Number(midPoint?.projected) || current)
-      const endProjected = Math.round(Number(endPoint?.projected) || current)
+      const endProjected = Math.round(Number(endPoint?.projected) || effectiveProjected || current)
       message = `Current Rs ${current}. Mid-shift projection Rs ${midProjected}. End-shift projection Rs ${endProjected}.`
     }
 
@@ -143,30 +158,12 @@ function Dashboard({ dailyTarget, isShiftStarted, isRideActive, setIsRideActive,
       severity,
       tags: [
         `PACE: ${(dashboard.pace_band || 'unknown').toUpperCase()}`,
-        `EARN: Rs ${Math.round(Number(dashboard.current_earnings) || 0)}`,
+        `EARN: Rs ${Math.round(effectiveCurrent)}`,
       ],
     }
 
     setNotifications((prev) => [nextNotification, ...prev].slice(0, MAX_NOTIFICATION_HISTORY))
   }
-
-  useEffect(() => {
-    const activeDriverId = driverId || 'DRV001'
-
-    const loadSidebarStats = async () => {
-      const dashboard = await fetchEarningsDashboardData(activeDriverId)
-      if (dashboard) {
-        setLiveDriverStats(dashboard)
-      }
-    }
-
-    void loadSidebarStats()
-    const interval = setInterval(() => {
-      void loadSidebarStats()
-    }, SIDEBAR_REFRESH_MS)
-
-    return () => clearInterval(interval)
-  }, [driverId])
 
   useEffect(() => {
     if (!isShiftStarted) {
@@ -252,23 +249,44 @@ function Dashboard({ dailyTarget, isShiftStarted, isRideActive, setIsRideActive,
 
     setIsRideActive(false)
 
-    if (USE_DUMMY_SUMMARY_MODAL) {
-      setRideSummary(buildDummySummary(rideId))
-      return
-    }
-
+    const integrationDriverId = driverId || 'DRV001'
+    const endedRideId = rideId || createRideId()
+    const elapsedMs = rideStartedAtRef.current ? Date.now() - rideStartedAtRef.current : 0
+    const distanceKm = Number(distanceKmRef.current.toFixed(1))
     const capturedStress = stressSamplesRef.current
     const averageStress = capturedStress.length
       ? capturedStress.reduce((total, value) => total + value, 0) / capturedStress.length
       : 0
     const clampedStress = clamp(averageStress, 0, 100)
-    const elapsedMs = rideStartedAtRef.current ? Date.now() - rideStartedAtRef.current : 0
-    const distanceKm = Number(distanceKmRef.current.toFixed(1))
     const safetyScore = clamp(100 - clampedStress - incidents.length * 4, 0, 100)
-    const currentEarning = Number((Number(dailyTarget ?? 0) * (0.65 + safetyScore / 250)).toFixed(2))
+    const computedCurrentEarning = Number((Number(dailyTarget ?? 0) * (0.65 + safetyScore / 250)).toFixed(2))
+    const alertMessages = buildRideAlertMessages(incidents)
+
+    void sendRideEndMetadata({
+      rideId: endedRideId,
+      driverId: integrationDriverId,
+      targetPay: Number(dailyTarget ?? 0),
+      timeElapsed: formatElapsedTime(elapsedMs),
+      distanceKm,
+      summaryStats: {
+        avgStress: Number(clampedStress.toFixed(1)),
+        totalEvents: incidents.length,
+        safetyScore: Number(safetyScore.toFixed(1)),
+        currentEarning: computedCurrentEarning,
+      },
+      incidents,
+      alertMessages,
+    })
+
+    if (USE_DUMMY_SUMMARY_MODAL) {
+      setRideSummary(buildDummySummary(rideId))
+      return
+    }
+
+    const currentEarning = computedCurrentEarning
 
     const payload = {
-      rideId,
+      rideId: endedRideId,
       driverId: '4882-QX',
       targetPay: Number(dailyTarget ?? 0),
       summaryStats: {
@@ -279,7 +297,7 @@ function Dashboard({ dailyTarget, isShiftStarted, isRideActive, setIsRideActive,
     }
 
     setRideSummary({
-      rideId,
+      rideId: endedRideId,
       avgStressScore: Number(clampedStress.toFixed(1)),
       currentEarning,
       timeElapsed: formatElapsedTime(elapsedMs),
@@ -292,10 +310,9 @@ function Dashboard({ dailyTarget, isShiftStarted, isRideActive, setIsRideActive,
     void completeRideSummary(payload)
 
     // Push one earnings event to Driver Pulse service so external charts can update.
-    const integrationDriverId = driverId || 'DRV001'
     void ensureEarningsDriver(integrationDriverId).then(() =>
       postEarningsTrip(integrationDriverId, {
-        trip_id: rideId || createRideId(),
+        trip_id: endedRideId,
         trip_earnings: currentEarning,
         trip_duration_min: Math.max(1, Math.round(elapsedMs / 60000)),
         fare: currentEarning,
@@ -318,7 +335,7 @@ function Dashboard({ dailyTarget, isShiftStarted, isRideActive, setIsRideActive,
   return (
     <main className="min-h-screen bg-slate-950 px-4 py-5 text-slate-100 sm:px-6 lg:px-8">
       <h1 className="sr-only">Driver Pulse Dashboard</h1>
-      <div className="mx-auto max-w-[1800px] space-y-5">
+      <div className="mx-auto max-w-450 space-y-5">
         <Header
           dailyTarget={dailyTarget}
           isRideActive={isRideActive}
@@ -328,7 +345,11 @@ function Dashboard({ dailyTarget, isShiftStarted, isRideActive, setIsRideActive,
         />
 
         <section className="grid gap-5 xl:grid-cols-[20%_55%_25%]">
-          <Sidebar stats={liveDriverStats} onOpenLogs={() => setIsLogsOverlayOpen(true)} />
+          <Sidebar
+            stats={liveDriverStats}
+            onOpenConsole={() => setIsConsoleOverlayOpen(true)}
+            onOpenLogs={() => setIsLogsOverlayOpen(true)}
+          />
           <MainContentArea
             liveNoiseDb={noiseDb}
             isRideActive={isRideActive}
@@ -344,6 +365,11 @@ function Dashboard({ dailyTarget, isShiftStarted, isRideActive, setIsRideActive,
           />
         </section>
       </div>
+
+      <ConsoleOverlay
+        isOpen={isConsoleOverlayOpen}
+        onClose={() => setIsConsoleOverlayOpen(false)}
+      />
 
       <RideSummaryModal
         isOpen={Boolean(rideSummary) && !forceHideRideSummaryModal}

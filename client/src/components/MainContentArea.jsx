@@ -77,6 +77,15 @@ const buildSeededLivePoints = (currentEarnings, targetEarnings) => {
 
 const buildSeededForecastPoints = (currentEarnings, projectedEarnings, targetEarnings) => {
   const current = Math.max(0, Number(currentEarnings) || 0)
+
+  if (current <= 0) {
+    return DUMMY_FORECAST_POINTS.map((value, idx) => ({
+      x: NOW_ANCHOR_X + (idx / (DUMMY_FORECAST_POINTS.length - 1)) * (1 - NOW_ANCHOR_X),
+      y: value,
+      series: 'forecast',
+    }))
+  }
+
   const projected = Math.max(0, Number(projectedEarnings) || 0)
   const target = Math.max(1, Number(targetEarnings) || FALLBACK_TARGET)
   const blendedProjected = projected > current + 20
@@ -249,10 +258,50 @@ function MainChart({ driverId, onDashboardUpdate }) {
 
           return trimmed
         })
+
+        const currentEarnings = Number(dashboard.current_earnings) || 0
+        const tripsCount = Number(dashboard.trips_count) || 0
+        const shouldUseDummyEarnings =
+          tripsCount === 0 &&
+          currentEarnings <= 0 &&
+          (projection?.timeline?.length || 0) === 0
+
+        const effectiveCurrentEarnings = shouldUseDummyEarnings
+          ? DUMMY_HISTORY_POINTS[DUMMY_HISTORY_POINTS.length - 1]
+          : currentEarnings
+
+        const effectiveProjectedEarnings = shouldUseDummyEarnings
+          ? DUMMY_FORECAST_POINTS[DUMMY_FORECAST_POINTS.length - 1]
+          : Number(projectedFromTimeline) || 0
+
         requestCountRef.current += 1
         dashboardUpdateRef.current?.({
           ...dashboard,
           projectionTimeline: projection?.timeline || [],
+          effective_current_earnings: effectiveCurrentEarnings,
+          effective_projected_earnings: effectiveProjectedEarnings,
+          is_dummy_earnings: shouldUseDummyEarnings,
+          polledAt: new Date().toISOString(),
+          pollCount: requestCountRef.current,
+        })
+        setLastUpdatedAt(new Date())
+      } else {
+        // Keep Sidebar stats in sync with chart fallback values when API is temporarily unavailable.
+        const fallbackCurrent = DUMMY_HISTORY_POINTS[DUMMY_HISTORY_POINTS.length - 1]
+        const fallbackProjected = DUMMY_FORECAST_POINTS[DUMMY_FORECAST_POINTS.length - 1]
+
+        requestCountRef.current += 1
+        dashboardUpdateRef.current?.({
+          driver_id: activeDriverId,
+          current_earnings: 0,
+          projected_earnings: 0,
+          target_earnings: FALLBACK_TARGET,
+          trips_count: 0,
+          pace_band: 'tracking',
+          projectionTimeline: [],
+          effective_current_earnings: fallbackCurrent,
+          effective_projected_earnings: fallbackProjected,
+          is_dummy_earnings: true,
           polledAt: new Date().toISOString(),
           pollCount: requestCountRef.current,
         })

@@ -122,7 +122,6 @@ function App() {
         isRideActive={isRideActive}
         setIsRideActive={setIsRideActive}
         driverId={driverId}
-        forceHideRideSummaryModal
       />
 
       {!isShiftStarted ? <PreShiftWelcome onLaunch={handleShiftStart} /> : null}

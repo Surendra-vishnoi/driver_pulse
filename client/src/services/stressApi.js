@@ -56,6 +56,46 @@ export async function completeRideSummary(payload) {
   }
 }
 
+export async function sendRideEndMetadata(payload) {
+  try {
+    const response = await fetch(`${API_BASE_URL}/api/rides/end-meta`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    })
+
+    if (!response.ok) {
+      throw new Error(`Ride end metadata request failed with status ${response.status}`)
+    }
+
+    return await response.json()
+  } catch (error) {
+    return {
+      ok: false,
+      error: error instanceof Error ? error.message : 'Unknown ride end metadata error',
+    }
+  }
+}
+
+export async function fetchRideEndMetadata() {
+  try {
+    const response = await fetch(`${API_BASE_URL}/api/rides/end-meta`)
+
+    if (!response.ok) {
+      throw new Error(`Ride end metadata fetch failed with status ${response.status}`)
+    }
+
+    return await response.json()
+  } catch (error) {
+    return {
+      ok: false,
+      error: error instanceof Error ? error.message : 'Unknown ride end metadata fetch error',
+      data: [],
+      count: 0,
+    }
+  }
+}
+
 export async function fetchEarningsProjection(driverId, points = 20) {
   try {
     const response = await fetch(

@@ -14,6 +14,7 @@ const PORT = process.env.PORT || 5000;
 const MONGODB_URI = process.env.MONGODB_URI || "mongodb://127.0.0.1:27017/driver_pulse";
 
 const DATA_DIR = path.join(__dirname, "..", "data");
+const rideEndEvents = [];
 
 function loadCsv(filePath) {
   const raw = fs.readFileSync(filePath, "utf-8");
@@ -22,6 +23,47 @@ function loadCsv(filePath) {
 
 app.use(cors());
 app.use(express.json());
+
+app.post("/api/rides/end-meta", (req, res) => {
+  const payload = req.body || {};
+  const rideId = String(payload.rideId || "").trim();
+  const driverId = String(payload.driverId || "").trim();
+
+  if (!rideId || !driverId) {
+    return res.status(400).json({
+      success: false,
+      message: "rideId and driverId are required.",
+    });
+  }
+
+  const event = {
+    receivedAt: new Date().toISOString(),
+    ...payload,
+  };
+
+  rideEndEvents.unshift(event);
+  if (rideEndEvents.length > 200) {
+    rideEndEvents.length = 200;
+  }
+
+  console.log(
+    `[Ride End Meta] rideId=${rideId} driverId=${driverId} alerts=${Array.isArray(payload.alertMessages) ? payload.alertMessages.length : 0}`
+  );
+
+  return res.status(201).json({
+    success: true,
+    message: "Ride end metadata received.",
+    data: event,
+  });
+});
+
+app.get("/api/rides/end-meta", (req, res) => {
+  return res.json({
+    success: true,
+    count: rideEndEvents.length,
+    data: rideEndEvents,
+  });
+});
 
 app.post("/api/rides/complete", async (req, res) => {
   try {
