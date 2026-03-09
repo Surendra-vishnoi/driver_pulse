@@ -1,10 +1,12 @@
 import { useEffect, useRef, useState } from 'react'
 import Header from '../components/Header'
-import HistoryPanel from '../components/HistoryPanel'
 import MainContentArea from '../components/MainContentArea'
 import RideSummaryModal from '../components/RideSummaryModal'
 import Sidebar from '../components/Sidebar'
 import ConsoleOverlay from '../components/ConsoleOverlay'
+import AnalyticsOverlay from '../components/AnalyticsOverlay'
+import LogsOverlay from '../components/LogsOverlay'
+import NotificationOverlay from '../components/NotificationOverlay'
 import { completeRideSummary, ensureEarningsDriver, postEarningsTrip, sendRideEndMetadata } from '../services/stressApi'
 import { useDriverSensors } from '../hooks/useDriverSensors'
 
@@ -103,6 +105,8 @@ function Dashboard({ dailyTarget, isShiftStarted, isRideActive, setIsRideActive,
   const [liveDriverStats, setLiveDriverStats] = useState(null)
   const [isLogsOverlayOpen, setIsLogsOverlayOpen] = useState(false)
   const [isConsoleOverlayOpen, setIsConsoleOverlayOpen] = useState(false)
+  const [isAnalyticsOverlayOpen, setIsAnalyticsOverlayOpen] = useState(false)
+  const [isNotificationOverlayOpen, setIsNotificationOverlayOpen] = useState(false)
   const stressSamplesRef = useRef([])
   const distanceKmRef = useRef(0)
   const rideStartedAtRef = useRef(null)
@@ -344,24 +348,17 @@ function Dashboard({ dailyTarget, isShiftStarted, isRideActive, setIsRideActive,
           smoothedStressScore={stressScore}
         />
 
-        <section className="grid gap-5 xl:grid-cols-[20%_55%_25%]">
+        <section className="grid gap-5 xl:grid-cols-[18%_55%_25%]">
           <Sidebar
             stats={liveDriverStats}
             onOpenConsole={() => setIsConsoleOverlayOpen(true)}
             onOpenLogs={() => setIsLogsOverlayOpen(true)}
+            onOpenAnalytics={() => setIsAnalyticsOverlayOpen(true)}
+            onOpenNotifications={() => setIsNotificationOverlayOpen(true)}
           />
           <MainContentArea
-            liveNoiseDb={noiseDb}
-            isRideActive={isRideActive}
-            sensorError={error}
             driverId={driverId}
             onDashboardUpdate={handleDashboardUpdate}
-          />
-          <HistoryPanel
-            notifications={notifications}
-            isOverlayOpen={isLogsOverlayOpen}
-            onOpenOverlay={() => setIsLogsOverlayOpen(true)}
-            onCloseOverlay={() => setIsLogsOverlayOpen(false)}
           />
         </section>
       </div>
@@ -369,6 +366,25 @@ function Dashboard({ dailyTarget, isShiftStarted, isRideActive, setIsRideActive,
       <ConsoleOverlay
         isOpen={isConsoleOverlayOpen}
         onClose={() => setIsConsoleOverlayOpen(false)}
+        driverId={driverId}
+      />
+
+      <AnalyticsOverlay
+        isOpen={isAnalyticsOverlayOpen}
+        onClose={() => setIsAnalyticsOverlayOpen(false)}
+        driverId={driverId}
+      />
+
+      <LogsOverlay
+        isOpen={isLogsOverlayOpen}
+        onClose={() => setIsLogsOverlayOpen(false)}
+        driverId={driverId}
+      />
+
+      <NotificationOverlay
+        isOpen={isNotificationOverlayOpen}
+        onClose={() => setIsNotificationOverlayOpen(false)}
+        notifications={notifications}
       />
 
       <RideSummaryModal

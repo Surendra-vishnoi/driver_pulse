@@ -1,13 +1,10 @@
-import { useEffect, useRef, useState } from 'react'
-import { accelData } from '../mockData/accelData'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { earningsFallback } from '../mockData/earningsFallback'
 import FlaggedMomentsPanel from './FlaggedMomentsPanel'
-import { fetchEarningsDashboardData, fetchEarningsProjection } from '../services/stressApi'
+import { fetchEarningsDashboardData, fetchEarningsProjection, fetchSensorData } from '../services/stressApi'
 
 const CHART_HEIGHT = 260
 const CHART_WIDTH = 900
-const AUDIO_POINTS = 42
-const NOMINAL_AUDIO_BASELINE = 56
 const PROJECTION_REFRESH_MS = 1 * 60 * 1000
 const FALLBACK_TARGET = 1000
 const NOW_ANCHOR_X = 0.8
@@ -516,113 +513,140 @@ function MainChart({ driverId, onDashboardUpdate }) {
   )
 }
 
-function AccelerationSpikesCard() {
-  const spikeIndexes = new Set(
-    [...accelData.bars.entries()]
-      .sort((a, b) => b[1] - a[1])
-      .slice(0, accelData.alertCount)
-      .map(([index]) => index),
-  )
+function AccelerationSpikesCard({ driverId }) {
+  const SPIKE_THRESHOLD = 3.5
+  const [accelRows, setAccelRows] = useState([])
+
+  useEffect(() => {
+    let cancelled = false
+    fetchSensorData().then((res) => {
+      if (cancelled || !res) return
+      const { accel, trips } = res
+      const normalizedId = (driverId || '').trim().toUpperCase()
+      const driverTrips = new Set(
+        (trips || []).filter((t) => !normalizedId || (t.driver_id || '').toUpperCase() === normalizedId).map((t) => t.trip_id),
+      )
+      const filtered = (accel || []).filter((r) => driverTrips.has(r.trip_id))
+      setAccelRows(filtered)
+    })
+    return () => { cancelled = true }
+  }, [driverId])
+
+  const { bars, alertCount } = useMemo(() => {
+    if (!accelRows.length) return { bars: [], alertCount: 0 }
+    const magnitudes = accelRows.map((r) => Math.sqrt(parseFloat(r.accel_x) ** 2 + parseFloat(r.accel_y) ** 2))
+    const maxMag = Math.max(...magnitudes, 1)
+    const barValues = magnitudes.map((m) => (m / maxMag) * 100)
+    const alerts = magnitudes.filter((m) => m >= SPIKE_THRESHOLD).length
+    return { bars: barValues, alertCount: alerts }
+  }, [accelRows])
+
+  const spikeIndexes = useMemo(() => {
+    if (!accelRows.length) return new Set()
+    const magnitudes = accelRows.map((r) => Math.sqrt(parseFloat(r.accel_x) ** 2 + parseFloat(r.accel_y) ** 2))
+    return new Set(magnitudes.map((m, i) => (m >= SPIKE_THRESHOLD ? i : -1)).filter((i) => i >= 0))
+  }, [accelRows])
 
   return (
     <section className="rounded-2xl border border-slate-800 bg-slate-900 p-5">
       <div className="flex items-center justify-between">
         <h3 className="text-sm font-semibold uppercase tracking-[0.22em] text-slate-200">Acceleration Spikes</h3>
         <span className="rounded-md border border-rose-500/40 bg-rose-500/10 px-2 py-1 text-xs font-semibold text-rose-400">
-          {accelData.alertCount} Alerts
+          {alertCount} Alerts
         </span>
       </div>
 
-      <div className="mt-4 flex h-[170px] items-end gap-2 rounded-xl border border-slate-800 bg-slate-950/70 p-3">
-        {accelData.bars.map((value, index) => (
+      <div className="mt-4 flex h-[170px] items-end gap-[1px] rounded-xl border border-slate-800 bg-slate-950/70 p-3 overflow-hidden">
+        {bars.length === 0 && <p className="m-auto text-xs text-slate-500">No acceleration data for {driverId || 'this driver'}</p>}
+        {bars.map((value, index) => (
           <div
-            key={`${value}-${index}`}
-            className={`flex-1 rounded-t-sm ${
+            key={`accel-${index}`}
+            className={`flex-1 min-w-[2px] rounded-t-sm ${
               spikeIndexes.has(index)
                 ? 'bg-gradient-to-t from-rose-700 to-rose-400 shadow-[0_0_10px_rgba(244,63,94,0.4)]'
                 : 'bg-gradient-to-t from-emerald-700 to-emerald-400'
             }`}
-            style={{ height: `${value}%` }}
+            style={{ height: `${Math.max(value, 2)}%` }}
           />
         ))}
       </div>
+      <p className="mt-2 text-xs text-slate-500">{accelRows.length} readings | Spike threshold: {SPIKE_THRESHOLD} m/s2</p>
     </section>
   )
 }
 
-function AudioIntensityCard({ isRideActive, liveNoiseDb, sensorError }) {
+function AudioIntensityCard({ driverId }) {
   const width = 420
   const height = 170
-  const [waveSeries, setWaveSeries] = useState(() => Array.from({ length: AUDIO_POINTS }, () => NOMINAL_AUDIO_BASELINE))
-  const noiseRef = useRef(liveNoiseDb)
-  const phaseRef = useRef(0)
+  const [audioRows, setAudioRows] = useState([])
 
   useEffect(() => {
-    noiseRef.current = liveNoiseDb
-  }, [liveNoiseDb])
+    let cancelled = false
+    fetchSensorData().then((res) => {
+      if (cancelled || !res) return
+      const { audio, trips } = res
+      const normalizedId = (driverId || '').trim().toUpperCase()
+      const driverTrips = new Set(
+        (trips || []).filter((t) => !normalizedId || (t.driver_id || '').toUpperCase() === normalizedId).map((t) => t.trip_id),
+      )
+      const filtered = (audio || []).filter((r) => driverTrips.has(r.trip_id))
+      setAudioRows(filtered)
+    })
+    return () => { cancelled = true }
+  }, [driverId])
 
-  useEffect(() => {
-    if (!isRideActive) {
-      setWaveSeries(Array.from({ length: AUDIO_POINTS }, () => NOMINAL_AUDIO_BASELINE))
-      return
-    }
+  const { dbValues, peakDb, avgDb } = useMemo(() => {
+    if (!audioRows.length) return { dbValues: [], peakDb: 0, avgDb: 0 }
+    const values = audioRows.map((r) => parseFloat(r.audio_level_db) || 0)
+    const peak = Math.max(...values)
+    const avg = values.reduce((s, v) => s + v, 0) / values.length
+    return { dbValues: values, peakDb: peak, avgDb: avg }
+  }, [audioRows])
 
-    const interval = setInterval(() => {
-      phaseRef.current += 0.6
+  const wavePath = useMemo(() => {
+    if (!dbValues.length) return ''
+    return createPath(dbValues, width, height, 0, Math.max(...dbValues, 100))
+  }, [dbValues, width, height])
 
-      setWaveSeries((prev) => {
-        const currentNoise = Number.isFinite(noiseRef.current) ? noiseRef.current : 42
-        const normalized = ((currentNoise - 30) / 80) * 100
-        const clamped = Math.min(Math.max(normalized, 0), 100)
-        const oscillation = Math.sin(phaseRef.current) * 3.2
-        const target = Math.min(Math.max(clamped + oscillation, 0), 100)
-        const last = prev[prev.length - 1] ?? NOMINAL_AUDIO_BASELINE
-        const next = Number((last + (target - last) * 0.35).toFixed(2))
-        return [...prev.slice(1), next]
-      })
-    }, 100)
-
-    return () => {
-      clearInterval(interval)
-    }
-  }, [isRideActive])
-
-  const wavePath = createPath(waveSeries, width, height, 0, 100)
-  const hasLiveNoise = isRideActive && Number.isFinite(liveNoiseDb) && liveNoiseDb > 0
-  const displayDb = hasLiveNoise ? liveNoiseDb : 42
-  const statusLabel = hasLiveNoise ? 'ACTIVE' : 'NOMINAL'
+  const statusLabel = peakDb >= 80 ? 'HIGH' : peakDb >= 60 ? 'MODERATE' : 'NOMINAL'
+  const statusColor = peakDb >= 80 ? 'text-rose-400' : peakDb >= 60 ? 'text-amber-400' : 'text-emerald-400'
+  const strokeColor = peakDb >= 80 ? '#f43f5e' : peakDb >= 60 ? '#f59e0b' : '#34d399'
 
   return (
     <section className="rounded-2xl border border-slate-800 bg-slate-900 p-5">
       <div className="flex items-center justify-between">
         <h3 className="text-sm font-semibold uppercase tracking-[0.22em] text-slate-200">Audio Intensity</h3>
-        <span className="text-sm font-semibold text-emerald-400">
-          {statusLabel} {displayDb.toFixed(1)}dB
+        <span className={`text-sm font-semibold ${statusColor}`}>
+          {statusLabel} | Peak {peakDb.toFixed(1)}dB | Avg {avgDb.toFixed(1)}dB
         </span>
       </div>
-      {sensorError ? <p className="mt-1 text-xs text-amber-300">Microphone permission not granted. Showing fallback dB.</p> : null}
 
       <div className="mt-4 h-[170px] rounded-xl border border-slate-800 bg-slate-950/70 p-3">
-        <svg viewBox={`0 0 ${width} ${height}`} className="h-full w-full" preserveAspectRatio="none">
-          <path d={wavePath} fill="none" stroke="#f59e0b" strokeWidth="3" strokeLinecap="round" />
-        </svg>
+        {dbValues.length === 0 && <p className="flex h-full items-center justify-center text-xs text-slate-500">No audio data for {driverId || 'this driver'}</p>}
+        {dbValues.length > 0 && (
+          <svg viewBox={`0 0 ${width} ${height}`} className="h-full w-full" preserveAspectRatio="none">
+            <path d={wavePath} fill="none" stroke={strokeColor} strokeWidth="2" strokeLinecap="round" />
+          </svg>
+        )}
       </div>
+      <p className="mt-2 text-xs text-slate-500">{audioRows.length} readings | Classifications: {[...new Set(audioRows.map((r) => r.audio_classification))].join(', ') || 'N/A'}</p>
     </section>
   )
 }
 
-function MainContentArea({ isRideActive, liveNoiseDb, sensorError, driverId, onDashboardUpdate }) {
+function MainContentArea({ driverId, onDashboardUpdate }) {
   return (
-    <section className="space-y-5">
-      <MainChart driverId={driverId} onDashboardUpdate={onDashboardUpdate} />
+    <>
+      <section className="space-y-5">
+        <MainChart driverId={driverId} onDashboardUpdate={onDashboardUpdate} />
+        <FlaggedMomentsPanel driverId={driverId} />
+      </section>
 
-      <div className="grid gap-5 xl:grid-cols-2">
-        <AccelerationSpikesCard />
-        <AudioIntensityCard isRideActive={isRideActive} liveNoiseDb={liveNoiseDb} sensorError={sensorError} />
-      </div>
-
-      <FlaggedMomentsPanel driverId={driverId} />
-    </section>
+      <aside className="space-y-5">
+        <AccelerationSpikesCard driverId={driverId} />
+        <AudioIntensityCard driverId={driverId} />
+      </aside>
+    </>
   )
 }
 

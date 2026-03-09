@@ -1,6 +1,6 @@
 const clamp = (value, min, max) => Math.min(max, Math.max(min, value))
 
-function Sidebar({ stats, onOpenConsole, onOpenLogs }) {
+function Sidebar({ stats, onOpenConsole, onOpenLogs, onOpenAnalytics, onOpenNotifications }) {
   const currentEarnings = Number(stats?.effective_current_earnings ?? stats?.current_earnings) || 0
   const targetEarnings = Math.max(1, Number(stats?.target_earnings) || 1500)
   const rawPercent = (currentEarnings / targetEarnings) * 100
@@ -25,16 +25,18 @@ function Sidebar({ stats, onOpenConsole, onOpenLogs }) {
   return (
     <aside className="flex h-full flex-col rounded-2xl border border-slate-800 bg-slate-900 p-5">
       <nav className="space-y-2">
-        {['Console', 'Analytics', 'Logs'].map((item) => (
+        {['Console', 'Analytics', 'Notifications'].map((item) => (
           <button
             key={item}
             type="button"
             onClick={
               item === 'Console'
                 ? onOpenConsole
-                : item === 'Logs'
-                  ? onOpenLogs
-                  : undefined
+                : item === 'Analytics'
+                  ? onOpenAnalytics
+                  : item === 'Notifications'
+                    ? onOpenNotifications
+                    : undefined
             }
             className="flex w-full items-center justify-between rounded-xl border border-slate-800 bg-slate-950 px-4 py-3 text-sm font-medium text-slate-300 transition hover:border-sky-400/40 hover:text-sky-400"
           >

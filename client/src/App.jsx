@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import PreShiftWelcome from './components/PreShiftWelcome'
 import RideSummaryModal from './components/RideSummaryModal'
 import TacticalAlertBanner from './components/TacticalAlertBanner'
+import AdminFlaggedPanel from './components/AdminFlaggedPanel'
 import Dashboard from './pages/Dashboard'
 import { SIMULATION_STATE } from './utils/mockData'
 
@@ -48,6 +49,7 @@ function App() {
   const [isShiftStarted, setIsShiftStarted] = useState(false)
   const [dailyTarget, setDailyTarget] = useState(null)
   const [driverId, setDriverId] = useState('')
+  const [role, setRole] = useState('driver')
   const [isRideActive, setIsRideActive] = useState(SIMULATION_STATE.isRideActive)
   const [isSummaryModalOpen, setIsSummaryModalOpen] = useState(false)
   const [isAlertDismissed, setIsAlertDismissed] = useState(false)
@@ -58,9 +60,10 @@ function App() {
   const shouldShowAlertBanner = isRideActive && hasAlertCondition && !isAlertDismissed
   const simulationSummary = useMemo(() => getSimulationSummary(), [SIMULATION_STATE.stressScore, SIMULATION_STATE.earnings, SIMULATION_STATE.noiseLevel, SIMULATION_STATE.accelSpike])
 
-  const handleShiftStart = (target, driver) => {
+  const handleShiftStart = (target, driver, selectedRole) => {
     setDailyTarget(target)
     setDriverId(driver || '')
+    setRole(selectedRole || 'driver')
     setIsShiftStarted(true)
   }
 
@@ -109,34 +112,59 @@ function App() {
 
   return (
     <div className="relative min-h-screen overflow-hidden">
-      <TacticalAlertBanner
-        shouldShow={shouldShowAlertBanner}
-        noiseLevel={SIMULATION_STATE.noiseLevel}
-        accelSpike={SIMULATION_STATE.accelSpike}
-        onClose={() => setIsAlertDismissed(true)}
-      />
-
-      <Dashboard
-        dailyTarget={dailyTarget}
-        isShiftStarted={isShiftStarted}
-        isRideActive={isRideActive}
-        setIsRideActive={setIsRideActive}
-        driverId={driverId}
-      />
-
       {!isShiftStarted ? <PreShiftWelcome onLaunch={handleShiftStart} /> : null}
 
-      <RideSummaryModal
-        isOpen={isSummaryModalOpen}
-        rideId={simulationSummary.rideId}
-        avgStressScore={simulationSummary.avgStressScore}
-        currentEarning={simulationSummary.currentEarning}
-        timeElapsed={simulationSummary.timeElapsed}
-        distance={simulationSummary.distance}
-        safetyScore={simulationSummary.safetyScore}
-        incidents={simulationSummary.incidents}
-        onDone={() => setIsSummaryModalOpen(false)}
-      />
+      {isShiftStarted && role === 'admin' && (
+        <main className="min-h-screen bg-slate-950 px-4 py-5 text-slate-100 sm:px-6 lg:px-8">
+          <div className="mx-auto max-w-[1800px] space-y-5">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-[0.22em] text-amber-400">Admin Dashboard</p>
+                <h1 className="mt-1 text-2xl font-semibold text-slate-100">Flagged Moments Overview</h1>
+              </div>
+              <button
+                type="button"
+                onClick={() => { setIsShiftStarted(false); setRole('driver') }}
+                className="rounded-xl border border-slate-700 bg-slate-900 px-4 py-2 text-xs font-semibold text-slate-300 transition hover:border-amber-500 hover:text-amber-400"
+              >
+                Sign Out
+              </button>
+            </div>
+            <AdminFlaggedPanel />
+          </div>
+        </main>
+      )}
+
+      {isShiftStarted && role !== 'admin' && (
+        <>
+          <TacticalAlertBanner
+            shouldShow={shouldShowAlertBanner}
+            noiseLevel={SIMULATION_STATE.noiseLevel}
+            accelSpike={SIMULATION_STATE.accelSpike}
+            onClose={() => setIsAlertDismissed(true)}
+          />
+
+          <Dashboard
+            dailyTarget={dailyTarget}
+            isShiftStarted={isShiftStarted}
+            isRideActive={isRideActive}
+            setIsRideActive={setIsRideActive}
+            driverId={driverId}
+          />
+
+          <RideSummaryModal
+            isOpen={isSummaryModalOpen}
+            rideId={simulationSummary.rideId}
+            avgStressScore={simulationSummary.avgStressScore}
+            currentEarning={simulationSummary.currentEarning}
+            timeElapsed={simulationSummary.timeElapsed}
+            distance={simulationSummary.distance}
+            safetyScore={simulationSummary.safetyScore}
+            incidents={simulationSummary.incidents}
+            onDone={() => setIsSummaryModalOpen(false)}
+          />
+        </>
+      )}
     </div>
   )
 }

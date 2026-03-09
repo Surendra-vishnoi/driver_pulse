@@ -29,17 +29,23 @@ function greetingByHour() {
 function PreShiftWelcome({ onLaunch }) {
   const [targetValue, setTargetValue] = useState(getInitialTarget)
   const [driverId, setDriverId] = useState(getInitialDriverId)
+  const [role, setRole] = useState('driver')
 
+  const isAdmin = role === 'admin'
   const isHighTarget = targetValue >= 2000
   const greetingText = useMemo(() => greetingByHour(), [])
 
+  const normalizedInput = driverId.trim().toUpperCase()
+
   const handleLaunch = () => {
     const safeValue = Math.max(1, Number(targetValue) || DEFAULT_TARGET)
-    const trimmedDriverId = driverId.trim()
+    const trimmedDriverId = isAdmin ? '' : normalizedInput
     window.localStorage.setItem('last_target', String(safeValue))
     window.localStorage.setItem('last_driver_id', trimmedDriverId)
-    onLaunch(safeValue, trimmedDriverId)
+    onLaunch(safeValue, trimmedDriverId, role)
   }
+
+  const canLaunch = isAdmin || Boolean(driverId.trim())
 
   return (
     <div className="fixed inset-0 z-50 grid place-items-center bg-slate-950/40 p-6 backdrop-blur-xl">
@@ -52,50 +58,89 @@ function PreShiftWelcome({ onLaunch }) {
       >
         <p className="text-sm font-semibold uppercase tracking-[0.22em] text-sky-400">Pre-Shift Check</p>
         <h2 className="mt-3 text-3xl font-semibold text-slate-100">{greetingText}</h2>
-        <p className="mt-2 text-sm text-slate-300">Enter your Driver ID and set your daily target before launching telemetry.</p>
+        <p className="mt-2 text-sm text-slate-300">
+          {isAdmin
+            ? 'Admin view — full flag stats and analytics across all drivers.'
+            : 'Enter your Driver ID and set your daily target before launching telemetry.'}
+        </p>
 
-        <label className="mt-8 block">
-          <span className="text-xs uppercase tracking-[0.2em] text-slate-400">Driver ID</span>
-          <div className="mt-2 flex items-center rounded-2xl border border-slate-700 bg-slate-950 px-4 py-3">
-            <input
-              type="text"
-              placeholder="e.g. DRV-1001"
-              value={driverId}
-              onChange={(event) => setDriverId(event.target.value)}
-              className="w-full bg-transparent text-xl font-semibold text-slate-100 placeholder-slate-600 outline-none"
-              aria-label="Driver ID"
-            />
-          </div>
-        </label>
+        <div className="mt-6 flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setRole('driver')}
+            className={`rounded-xl px-4 py-2 text-xs font-semibold transition ${
+              role === 'driver'
+                ? 'bg-sky-400 text-slate-950'
+                : 'border border-slate-700 bg-slate-950 text-slate-400 hover:border-sky-500'
+            }`}
+          >
+            Driver
+          </button>
+          <button
+            type="button"
+            onClick={() => setRole('admin')}
+            className={`rounded-xl px-4 py-2 text-xs font-semibold transition ${
+              role === 'admin'
+                ? 'bg-amber-400 text-slate-950'
+                : 'border border-slate-700 bg-slate-950 text-slate-400 hover:border-amber-500'
+            }`}
+          >
+            Admin
+          </button>
+        </div>
 
-        <label className="mt-5 block">
-          <span className="text-xs uppercase tracking-[0.2em] text-slate-400">Daily Target</span>
-          <div className="mt-2 flex items-center rounded-2xl border border-slate-700 bg-slate-950 px-4 py-3">
-            <span className="text-xl font-semibold text-sky-400">$</span>
-            <input
-              type="number"
-              min="1"
-              step="10"
-              value={targetValue}
-              onChange={(event) => setTargetValue(event.target.value)}
-              className="ml-3 w-full bg-transparent text-3xl font-semibold text-slate-100 outline-none"
-              aria-label="Daily earnings target"
-            />
-          </div>
-        </label>
+        {!isAdmin && (
+          <label className="mt-5 block">
+            <span className="text-xs uppercase tracking-[0.2em] text-slate-400">Driver ID</span>
+            <div className={`mt-2 flex items-center rounded-2xl border border-slate-700 bg-slate-950 px-4 py-3`}>
+              <input
+                type="text"
+                placeholder="e.g. DRV001"
+                value={driverId}
+                onChange={(event) => setDriverId(event.target.value)}
+                className="w-full bg-transparent text-xl font-semibold text-slate-100 placeholder-slate-600 outline-none"
+                aria-label="Driver ID"
+              />
+            </div>
+          </label>
+        )}
+
+        {!isAdmin && (
+          <label className="mt-5 block">
+            <span className="text-xs uppercase tracking-[0.2em] text-slate-400">Daily Target</span>
+            <div className="mt-2 flex items-center rounded-2xl border border-slate-700 bg-slate-950 px-4 py-3">
+              <span className="text-xl font-semibold text-sky-400">₹</span>
+              <input
+                type="number"
+                min="1"
+                step="10"
+                value={targetValue}
+                onChange={(event) => setTargetValue(event.target.value)}
+                className="ml-3 w-full bg-transparent text-3xl font-semibold text-slate-100 outline-none"
+                aria-label="Daily earnings target"
+              />
+            </div>
+          </label>
+        )}
 
         <button
           type="button"
           onClick={handleLaunch}
-          disabled={!driverId.trim()}
-          className="mt-7 w-full rounded-2xl bg-sky-400 px-5 py-3 text-base font-semibold text-slate-950 transition hover:bg-sky-300 disabled:cursor-not-allowed disabled:opacity-40"
+          disabled={!canLaunch}
+          className={`mt-7 w-full rounded-2xl px-5 py-3 text-base font-semibold transition disabled:cursor-not-allowed disabled:opacity-40 ${
+            isAdmin
+              ? 'bg-amber-400 text-slate-950 hover:bg-amber-300'
+              : 'bg-sky-400 text-slate-950 hover:bg-sky-300'
+          }`}
         >
-          Launch Dashboard
+          {isAdmin ? 'Open Admin Dashboard' : 'Launch Dashboard'}
         </button>
 
-        <p className="mt-5 text-center text-xs text-emerald-400">
-          Tip: Drivers who set a goal earn 15% more on average.
-        </p>
+        {!isAdmin && (
+          <p className="mt-5 text-center text-xs text-emerald-400">
+            Tip: Drivers who set a goal earn 15% more on average.
+          </p>
+        )}
       </section>
     </div>
   )

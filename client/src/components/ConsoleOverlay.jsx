@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
-import { fetchRideEndMetadata } from '../services/stressApi'
+import { fetchSensorData } from '../services/stressApi'
+import { runFlaggingPipeline } from '../utils/flagEngine'
 
 function formatTime(value) {
   if (!value) return 'Unknown time'
@@ -8,44 +9,49 @@ function formatTime(value) {
   return date.toLocaleString()
 }
 
-function ConsoleOverlay({ isOpen, onClose }) {
+function ConsoleOverlay({ isOpen, onClose, driverId }) {
   const [isLoading, setIsLoading] = useState(false)
-  const [events, setEvents] = useState([])
+  const [trips, setTrips] = useState([])
+  const [flagsByTrip, setFlagsByTrip] = useState({})
   const [error, setError] = useState('')
 
   useEffect(() => {
     if (!isOpen) return
-
-    let isMounted = true
+    let cancelled = false
     setIsLoading(true)
     setError('')
-
-    void fetchRideEndMetadata()
-      .then((result) => {
-        if (!isMounted) return
-
-        if (result?.success) {
-          setEvents(Array.isArray(result.data) ? result.data : [])
+    fetchSensorData()
+      .then((data) => {
+        if (cancelled) return
+        if (!data || !data.trips) {
+          setError('Could not load trip data.')
+          setTrips([])
+          setFlagsByTrip({})
           return
         }
-
-        setEvents([])
-        setError(result?.error || 'Failed to load console events.')
+        let filteredTrips = data.trips
+        if (driverId) {
+          const normId = driverId.trim().toUpperCase()
+          filteredTrips = filteredTrips.filter(t => (t.driver_id || '').toUpperCase() === normId)
+        }
+        setTrips(filteredTrips)
+        const flagged = runFlaggingPipeline(data).flagged
+        const byTrip = {}
+        for (const f of flagged) {
+          if (driverId && (f.driver_id || '').toUpperCase() !== driverId.trim().toUpperCase()) continue
+          if (!byTrip[f.trip_id]) byTrip[f.trip_id] = []
+          byTrip[f.trip_id].push(f)
+        }
+        setFlagsByTrip(byTrip)
       })
       .catch((err) => {
-        if (!isMounted) return
-        setEvents([])
-        setError(err instanceof Error ? err.message : 'Failed to load console events.')
+        if (!cancelled) setError(err instanceof Error ? err.message : 'Failed to load trip data.')
+        setTrips([])
+        setFlagsByTrip({})
       })
-      .finally(() => {
-        if (!isMounted) return
-        setIsLoading(false)
-      })
-
-    return () => {
-      isMounted = false
-    }
-  }, [isOpen])
+      .finally(() => { if (!cancelled) setIsLoading(false) })
+    return () => { cancelled = true }
+  }, [isOpen, driverId])
 
   useEffect(() => {
     if (!isOpen || typeof document === 'undefined') return
@@ -74,55 +80,60 @@ function ConsoleOverlay({ isOpen, onClose }) {
 
         <div className="mb-4 pr-10">
           <p className="text-xs uppercase tracking-[0.24em] text-slate-400">Console</p>
-          <h3 className="mt-1 text-xl font-semibold text-slate-100">Ride End Events</h3>
-          <p className="mt-1 text-xs text-slate-400">Server receiver stream for ride-end metadata and alerts</p>
+          <h3 className="mt-1 text-xl font-semibold text-slate-100">Trip-wise Data</h3>
+          <p className="mt-1 text-xs text-slate-400">Live summary of all trips and detected flags</p>
         </div>
 
-        {isLoading ? <p className="text-sm text-slate-300">Loading events...</p> : null}
+        {isLoading ? <p className="text-sm text-slate-300">Loading trip data...</p> : null}
         {!isLoading && error ? <p className="text-sm text-rose-300">{error}</p> : null}
 
         {!isLoading && !error ? (
           <div className="max-h-[62vh] space-y-3 overflow-y-auto pr-1">
-            {events.length ? (
-              events.map((event, index) => (
-                <article key={`${event.rideId || 'ride'}-${event.receivedAt || index}`} className="rounded-xl border border-slate-800 bg-slate-950 p-4">
-                  <div className="flex flex-wrap items-start justify-between gap-2">
-                    <h4 className="text-sm font-semibold text-slate-100">
-                      Ride {event.rideId || 'Unknown'} | Driver {event.driverId || 'Unknown'}
-                    </h4>
-                    <span className="text-xs text-slate-400">{formatTime(event.receivedAt)}</span>
-                  </div>
-
-                  <div className="mt-2 grid gap-2 text-sm text-slate-300 sm:grid-cols-2">
-                    <p>Target Pay: Rs {Math.round(Number(event.targetPay) || 0).toLocaleString()}</p>
-                    <p>Current Earning: Rs {Math.round(Number(event.summaryStats?.currentEarning) || 0).toLocaleString()}</p>
-                    <p>Duration: {event.timeElapsed || '00:00'}</p>
-                    <p>Distance: {Number(event.distanceKm || 0).toFixed(1)} km</p>
-                    <p>Avg Stress: {Number(event.summaryStats?.avgStress || 0).toFixed(1)}</p>
-                    <p>Total Events: {Number(event.summaryStats?.totalEvents || 0)}</p>
-                  </div>
-
-                  <div className="mt-3">
-                    <p className="text-xs uppercase tracking-[0.18em] text-slate-400">Alerts</p>
-                    <div className="mt-2 flex flex-wrap gap-2">
-                      {Array.isArray(event.alertMessages) && event.alertMessages.length ? (
-                        event.alertMessages.map((message, msgIndex) => (
-                          <span key={`${event.rideId || 'ride'}-alert-${msgIndex}`} className="rounded-md border border-amber-500/40 bg-amber-500/10 px-2 py-1 text-xs font-semibold text-amber-300">
-                            {message}
-                          </span>
-                        ))
-                      ) : (
-                        <span className="rounded-md border border-emerald-500/40 bg-emerald-500/10 px-2 py-1 text-xs font-semibold text-emerald-300">
-                          No alert messages
-                        </span>
-                      )}
+            {trips.length ? (
+              trips.map((trip) => {
+                const flags = flagsByTrip[trip.trip_id] || []
+                return (
+                  <article key={trip.trip_id} className="rounded-xl border border-slate-800 bg-slate-950 p-4">
+                    <div className="flex flex-wrap items-start justify-between gap-2">
+                      <h4 className="text-sm font-semibold text-slate-100">
+                        Trip {trip.trip_id} | Driver {trip.driver_id}
+                      </h4>
+                      <span className="text-xs text-slate-400">{trip.date} {trip.start_time} - {trip.end_time}</span>
                     </div>
-                  </div>
-                </article>
-              ))
+                    <div className="mt-2 grid gap-2 text-sm text-slate-300 sm:grid-cols-2">
+                      <p>Distance: {Number(trip.distance_km || 0).toFixed(1)} km</p>
+                      <p>Fare: Rs {Math.round(Number(trip.fare) || 0).toLocaleString()}</p>
+                      <p>Duration: {trip.duration_min} min</p>
+                      <p>Status: {trip.trip_status}</p>
+                    </div>
+                    <div className="mt-3">
+                      <p className="text-xs uppercase tracking-[0.18em] text-slate-400">Flags</p>
+                      <div className="mt-2 flex flex-wrap gap-2">
+                        {flags.length ? (
+                          flags.map((flag, idx) => (
+                            <span key={flag.flag_id} className={`rounded-md border px-2 py-1 text-xs font-semibold ${
+                              flag.severity === 'high'
+                                ? 'border-rose-500/40 bg-rose-500/10 text-rose-300'
+                                : flag.severity === 'medium'
+                                ? 'border-amber-500/40 bg-amber-500/10 text-amber-300'
+                                : 'border-emerald-500/40 bg-emerald-500/10 text-emerald-300'
+                            }`}>
+                              {flag.flag_type.replace(/_/g, ' ')} ({flag.severity})
+                            </span>
+                          ))
+                        ) : (
+                          <span className="rounded-md border border-emerald-500/40 bg-emerald-500/10 px-2 py-1 text-xs font-semibold text-emerald-300">
+                            No flags
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  </article>
+                )
+              })
             ) : (
               <div className="rounded-xl border border-slate-800 bg-slate-950 p-6 text-sm text-slate-300">
-                No ride-end events received yet.
+                No trips found.
               </div>
             )}
           </div>
