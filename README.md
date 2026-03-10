@@ -1,16 +1,16 @@
-# Driver Pulse
+# Driver Pulse: Team 16
 ## Project Overview
 
-**🌐 Live Demo:** [https://driver-pulse-n8vq.onrender.com](https://driver-pulse-n8vq.onrender.com)
+**Demo Video:** [https://www.youtube.com/watch?v=2TvFm59YdVs&feature=youtu.be](https://www.youtube.com/watch?v=2TvFm59YdVs&feature=youtu.be)
+**🌐 Live Application:** [https://driver-pulse-n8vq.onrender.com](https://driver-pulse-n8vq.onrender.com)
 **Note:** the combined stack (Python API + Node + React) can take a minute or two to boot on first run; please be patient if endpoints are not immediately available.
-
-**Demo Link:** [https://www.youtube.com/watch?v=2TvFm59YdVs&feature=youtu.be](https://www.youtube.com/watch?v=2TvFm59YdVs&feature=youtu.be)
-## Testing Configuration
-
 For the best experience while testing the project:
 
 - Use **Driver ID:** `DRV188`
 - Set the **target:** `1500`
+
+**Demo Video:** [https://www.youtube.com/watch?v=2TvFm59YdVs&feature=youtu.be](https://www.youtube.com/watch?v=2TvFm59YdVs&feature=youtu.be)
+## Testing Configuration
 
 This configuration is recommended because the dataset for `DRV188` contains richer activity, which helps demonstrate the platform features more effectively.
 
