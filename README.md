@@ -2,8 +2,10 @@
 ## Project Overview
 
 **🌐 Live Demo:** [https://driver-pulse-n8vq.onrender.com](https://driver-pulse-n8vq.onrender.com)
+**Note:** the combined stack (Python API + Node + React) can take a minute or two to boot on first run; please be patient if endpoints are not immediately available.
 
 Driver Pulse is a real-time driver earnings tracking and stress monitoring system designed for ride-hailing platforms. The system provides drivers with live pace scoring, projected earnings visualization, and stress detection through edge-processed sensor data.
+
 
 | Component | Responsibility |
 |-----------|----------------|
@@ -30,6 +32,7 @@ Key differentiators: real‑time pace scoring with 4‑signal model, edge sensor
 ## Deployment & Production
 
 - The current public URL is deployed on Render at [driver-pulse-n8vq.onrender.com](https://driver-pulse-n8vq.onrender.com).
+  **Note:** the combined stack (Python API + Node + React) can take a minute or two to boot on first run; please be patient if endpoints are not immediately available.
 - Deployment uses a Dockerfile combining Node service + built React app; Python API runs separately (e.g. via `uvicorn` container or Render web service).
 - For production, ensure `MONGO_URI` points to a managed database and secure environment variables.
 
