@@ -1,5 +1,4 @@
 # Driver Pulse: Team 16
-## Project Overview
 
 **Demo Video:** [https://www.youtube.com/watch?v=2TvFm59YdVs&feature=youtu.be](https://www.youtube.com/watch?v=2TvFm59YdVs&feature=youtu.be)
 **🌐 Live Application:** [https://driver-pulse-n8vq.onrender.com](https://driver-pulse-n8vq.onrender.com)
@@ -17,6 +16,7 @@ This configuration is recommended because the dataset for `DRV188` contains rich
 > Note: The system works with other drivers as well, but this setup provides more meaningful results during demo/testing.
 
 ---
+## Project Overview
 
 Driver Pulse is a real-time driver earnings tracking and stress monitoring system designed for ride-hailing platforms. The system provides drivers with live pace scoring, projected earnings visualization, and stress detection through edge-processed sensor data.
 
