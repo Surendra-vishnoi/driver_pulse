@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { earningsFallback } from '../mockData/earningsFallback'
-import FlaggedMomentsPanel from './FlaggedMomentsPanel'
 import {
   fetchEarningsDashboardData,
   fetchEarningsProjection,
@@ -653,17 +652,13 @@ function AudioIntensityCard({ driverId }) {
 
 function MainContentArea({ driverId, onDashboardUpdate }) {
   return (
-    <>
-      <section className="space-y-5">
-        <MainChart driverId={driverId} onDashboardUpdate={onDashboardUpdate} />
-        <FlaggedMomentsPanel driverId={driverId} />
-      </section>
-
-      <aside className="space-y-5">
+    <section className="space-y-5">
+      <MainChart driverId={driverId} onDashboardUpdate={onDashboardUpdate} />
+      <div className="grid gap-5 xl:grid-cols-2">
         <AccelerationSpikesCard driverId={driverId} />
         <AudioIntensityCard driverId={driverId} />
-      </aside>
-    </>
+      </div>
+    </section>
   )
 }
 

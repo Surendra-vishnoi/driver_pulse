@@ -36,7 +36,7 @@ function Sidebar({ stats, onOpenConsole, onOpenLogs, onOpenAnalytics, onOpenNoti
                   ? onOpenAnalytics
                   : item === 'Notifications'
                     ? onOpenNotifications
-                    : undefined
+                  : undefined
             }
             className="flex w-full items-center justify-between rounded-xl border border-slate-800 bg-slate-950 px-4 py-3 text-sm font-medium text-slate-300 transition hover:border-sky-400/40 hover:text-sky-400"
           >

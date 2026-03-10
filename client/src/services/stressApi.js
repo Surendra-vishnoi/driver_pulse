@@ -1,9 +1,28 @@
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? ''
-const EARNINGS_API_BASE_URL = import.meta.env.VITE_EARNINGS_API_BASE_URL ?? ''
+const normalizeBase = (value) => String(value || '').trim().replace(/\/+$/, '')
+
+const isBrowser = typeof window !== 'undefined'
+const currentOrigin = isBrowser ? window.location.origin : ''
+const isLocalViteOrigin = /localhost:5173|127\.0\.0\.1:5173/i.test(currentOrigin)
+
+const configuredApiBase = normalizeBase(import.meta.env.VITE_API_BASE_URL)
+const configuredEarningsBase = normalizeBase(import.meta.env.VITE_EARNINGS_API_BASE_URL)
+
+const derivedApiBase = configuredApiBase || (isLocalViteOrigin ? 'http://127.0.0.1:5000' : '')
+const derivedEarningsBase = configuredEarningsBase || derivedApiBase
+
+const API_BASE_URL = normalizeBase(derivedApiBase)
+const EARNINGS_API_BASE_URL = normalizeBase(derivedEarningsBase)
+
+if (isBrowser && !configuredApiBase && !configuredEarningsBase && !isLocalViteOrigin) {
+  console.warn('[stressApi] Missing VITE_API_BASE_URL / VITE_EARNINGS_API_BASE_URL. Requests will use relative paths.')
+}
+
+const apiUrl = (path) => `${API_BASE_URL}${path}`
+const earningsUrl = (path) => `${EARNINGS_API_BASE_URL}${path}`
 
 export async function fetchSensorData() {
   try {
-    const response = await fetch(`${API_BASE_URL}/api/sensor-data`)
+    const response = await fetch(apiUrl('/api/sensor-data'))
     if (!response.ok) throw new Error(`Sensor data request failed with status ${response.status}`)
     const json = await response.json()
     return json.data
@@ -15,7 +34,7 @@ export async function fetchSensorData() {
 
 export async function sendDriverTelemetry(payload) {
   try {
-    const response = await fetch(`${API_BASE_URL}/api/driver/telemetry`, {
+    const response = await fetch(apiUrl('/api/driver/telemetry'), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload),
@@ -37,7 +56,7 @@ export async function sendDriverTelemetry(payload) {
 
 export async function completeRideSummary(payload) {
   try {
-    const response = await fetch(`${API_BASE_URL}/api/rides/complete`, {
+    const response = await fetch(apiUrl('/api/rides/complete'), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload),
@@ -58,7 +77,7 @@ export async function completeRideSummary(payload) {
 
 export async function sendRideEndMetadata(payload) {
   try {
-    const response = await fetch(`${API_BASE_URL}/api/rides/end-meta`, {
+    const response = await fetch(apiUrl('/api/rides/end-meta'), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload),
@@ -79,7 +98,7 @@ export async function sendRideEndMetadata(payload) {
 
 export async function fetchRideEndMetadata() {
   try {
-    const response = await fetch(`${API_BASE_URL}/api/rides/end-meta`)
+    const response = await fetch(apiUrl('/api/rides/end-meta'))
 
     if (!response.ok) {
       throw new Error(`Ride end metadata fetch failed with status ${response.status}`)
@@ -99,7 +118,7 @@ export async function fetchRideEndMetadata() {
 export async function fetchEarningsProjection(driverId, points = 20) {
   try {
     const response = await fetch(
-      `${EARNINGS_API_BASE_URL}/drivers/${encodeURIComponent(driverId)}/projection?points=${points}`,
+      earningsUrl(`/drivers/${encodeURIComponent(driverId)}/projection?points=${points}`),
     )
 
     if (!response.ok) {
@@ -116,7 +135,7 @@ export async function fetchEarningsProjection(driverId, points = 20) {
 export async function fetchEarningsDashboardData(driverId) {
   try {
     const response = await fetch(
-      `${EARNINGS_API_BASE_URL}/drivers/${encodeURIComponent(driverId)}/dashboard/data`,
+      earningsUrl(`/drivers/${encodeURIComponent(driverId)}/dashboard/data`),
     )
 
     if (!response.ok) {
@@ -132,7 +151,7 @@ export async function fetchEarningsDashboardData(driverId) {
 
 export async function ensureEarningsDriver(driverId) {
   try {
-    const response = await fetch(`${EARNINGS_API_BASE_URL}/drivers/login`, {
+    const response = await fetch(earningsUrl('/drivers/login'), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ driver_id: driverId }),
@@ -152,7 +171,7 @@ export async function ensureEarningsDriver(driverId) {
 export async function postEarningsTrip(driverId, tripPayload) {
   try {
     const response = await fetch(
-      `${EARNINGS_API_BASE_URL}/drivers/${encodeURIComponent(driverId)}/trips`,
+      earningsUrl(`/drivers/${encodeURIComponent(driverId)}/trips`),
       {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -174,7 +193,7 @@ export async function postEarningsTrip(driverId, tripPayload) {
 export async function fetchEarningsTrips(driverId) {
   try {
     const response = await fetch(
-      `${EARNINGS_API_BASE_URL}/drivers/${encodeURIComponent(driverId)}/trips`,
+      earningsUrl(`/drivers/${encodeURIComponent(driverId)}/trips`),
     )
 
     if (!response.ok) {
@@ -184,6 +203,23 @@ export async function fetchEarningsTrips(driverId) {
     return await response.json()
   } catch (error) {
     console.error('[fetchEarningsTrips]', error)
+    return null
+  }
+}
+
+export async function fetchDriverNotifications(driverId, limit = 4) {
+  try {
+    const response = await fetch(
+      earningsUrl(`/drivers/${encodeURIComponent(driverId)}/notifications/recent?limit=${limit}`),
+    )
+
+    if (!response.ok) {
+      throw new Error(`Driver notifications request failed with status ${response.status}`)
+    }
+
+    return await response.json()
+  } catch (error) {
+    console.error('[fetchDriverNotifications]', error)
     return null
   }
 }

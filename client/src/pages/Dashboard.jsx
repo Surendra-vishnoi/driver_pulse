@@ -1,13 +1,20 @@
 import { useEffect, useRef, useState } from 'react'
 import Header from '../components/Header'
 import MainContentArea from '../components/MainContentArea'
+import NotificationPanel from '../components/NotificationPanel'
 import RideSummaryModal from '../components/RideSummaryModal'
 import Sidebar from '../components/Sidebar'
 import ConsoleOverlay from '../components/ConsoleOverlay'
 import AnalyticsOverlay from '../components/AnalyticsOverlay'
 import LogsOverlay from '../components/LogsOverlay'
 import NotificationOverlay from '../components/NotificationOverlay'
-import { completeRideSummary, ensureEarningsDriver, postEarningsTrip, sendRideEndMetadata } from '../services/stressApi'
+import {
+  completeRideSummary,
+  ensureEarningsDriver,
+  fetchDriverNotifications,
+  postEarningsTrip,
+  sendRideEndMetadata,
+} from '../services/stressApi'
 import { useDriverSensors } from '../hooks/useDriverSensors'
 
 const NOISE_INCIDENT_THRESHOLD_DB = 85
@@ -17,41 +24,7 @@ const USE_DUMMY_SUMMARY_MODAL = true
 const DUMMY_AVG_STRESS_SCORE = 91
 const DUMMY_SAFETY_SCORE = 81
 const MAX_NOTIFICATION_HISTORY = 200
-
-const DUMMY_NOTIFICATIONS = [
-  {
-    id: 'seed-1',
-    title: 'Mid-Shift Snapshot',
-    message: 'You are in the mid-shift window. Maintain current pickup cadence for stable pace.',
-    timestampLabel: 'Just now',
-    severity: 'nominal',
-    tags: ['MID SHIFT', 'PACE STABLE'],
-  },
-  {
-    id: 'seed-2',
-    title: 'Demand Window',
-    message: 'Demand is moderate in nearby zones. Favor short trips to keep hourly velocity high.',
-    timestampLabel: '2m ago',
-    severity: 'warning',
-    tags: ['ZONE TIP', 'SHORT TRIPS'],
-  },
-  {
-    id: 'seed-3',
-    title: 'Harsh Braking Detected',
-    message: 'Sharp deceleration pattern detected. Ease braking over the next few rides to stabilize stress and safety score.',
-    timestampLabel: '6m ago',
-    severity: 'alert',
-    tags: ['HARSH BRAKE', 'SAFETY ALERT'],
-  },
-  {
-    id: 'seed-4',
-    title: 'Goal Watch',
-    message: 'Projected finish is healthy. Keep acceptance steady through the next demand block.',
-    timestampLabel: '11m ago',
-    severity: 'nominal',
-    tags: ['ON TRACK', 'CONSISTENCY'],
-  },
-]
+const MAX_NOTIFICATION_WIDGET_ITEMS = 4
 
 const createRideId = () => `RIDE-${Date.now()}-${Math.floor(Math.random() * 1000)}`
 
@@ -101,7 +74,7 @@ function Dashboard({ dailyTarget, isShiftStarted, isRideActive, setIsRideActive,
   const [rideId, setRideId] = useState('')
   const [incidents, setIncidents] = useState([])
   const [rideSummary, setRideSummary] = useState(null)
-  const [notifications, setNotifications] = useState(DUMMY_NOTIFICATIONS)
+  const [notifications, setNotifications] = useState([])
   const [liveDriverStats, setLiveDriverStats] = useState(null)
   const [isLogsOverlayOpen, setIsLogsOverlayOpen] = useState(false)
   const [isConsoleOverlayOpen, setIsConsoleOverlayOpen] = useState(false)
@@ -110,7 +83,6 @@ function Dashboard({ dailyTarget, isShiftStarted, isRideActive, setIsRideActive,
   const stressSamplesRef = useRef([])
   const distanceKmRef = useRef(0)
   const rideStartedAtRef = useRef(null)
-  const lastMessageSignatureRef = useRef('')
   const incidentCooldownRef = useRef({
     EXTREME_NOISE: 0,
     HARSH_DRIVING: 0,
@@ -121,10 +93,32 @@ function Dashboard({ dailyTarget, isShiftStarted, isRideActive, setIsRideActive,
     return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
   }
 
-  const mapPaceBandToSeverity = (paceBand) => {
-    if (paceBand === 'behind' || paceBand === 'critical') return 'alert'
-    if (paceBand === 'too_early' || paceBand === 'at_risk') return 'warning'
-    return 'nominal'
+  const mapSeverity = (value) => {
+    const token = String(value || '').toLowerCase()
+    if (token === 'alert' || token === 'critical' || token === 'error') return 'warning'
+    if (token === 'ok' || token === 'nominal' || token === 'success') return 'success'
+    return 'info'
+  }
+
+  const refreshNotifications = async (activeDriverId) => {
+    const response = await fetchDriverNotifications(activeDriverId, MAX_NOTIFICATION_HISTORY)
+    const rows = Array.isArray(response?.notifications) ? response.notifications : []
+
+    if (!rows.length) return
+
+    const sortedRows = [...rows].sort(
+      (a, b) => new Date(b.timestamp || b.created_at || 0).getTime() - new Date(a.timestamp || a.created_at || 0).getTime(),
+    )
+
+    setNotifications(
+      sortedRows.slice(0, MAX_NOTIFICATION_HISTORY).map((item, index) => ({
+        id: item.id || `backend-notification-${index}`,
+        title: item.title || 'Driver Insight',
+        message: item.message || item.driver_message || 'No additional details available.',
+        timestampLabel: formatNotificationTime(item.timestamp || item.created_at),
+        severity: mapSeverity(item.severity || item.type),
+      })),
+    )
   }
 
   const handleDashboardUpdate = (dashboard) => {
@@ -132,42 +126,19 @@ function Dashboard({ dailyTarget, isShiftStarted, isRideActive, setIsRideActive,
 
     setLiveDriverStats(dashboard)
 
-    const effectiveCurrent = Number(dashboard.effective_current_earnings ?? dashboard.current_earnings) || 0
-    const effectiveProjected = Number(dashboard.effective_projected_earnings ?? dashboard.projected_earnings) || 0
-
-    let message = String(dashboard.driver_message || '').trim()
-
-    if (dashboard.pace_band === 'too_early' && Array.isArray(dashboard.projectionTimeline) && dashboard.projectionTimeline.length >= 2) {
-      const timeline = dashboard.projectionTimeline
-      const midPoint = timeline[Math.floor(timeline.length / 2)]
-      const endPoint = timeline[timeline.length - 1]
-      const current = Math.round(effectiveCurrent)
-      const midProjected = Math.round(Number(midPoint?.projected) || current)
-      const endProjected = Math.round(Number(endPoint?.projected) || effectiveProjected || current)
-      message = `Current Rs ${current}. Mid-shift projection Rs ${midProjected}. End-shift projection Rs ${endProjected}.`
-    }
-
-    if (!message) return
-
-    const signature = `${dashboard.pace_band}|${message}`
-    if (signature === lastMessageSignatureRef.current) return
-    lastMessageSignatureRef.current = signature
-
-    const severity = mapPaceBandToSeverity(dashboard.pace_band)
-    const nextNotification = {
-      id: `notif-${Date.now()}`,
-      title: 'Driver Guidance',
-      message,
-      timestampLabel: formatNotificationTime(dashboard.polledAt),
-      severity,
-      tags: [
-        `PACE: ${(dashboard.pace_band || 'unknown').toUpperCase()}`,
-        `EARN: Rs ${Math.round(effectiveCurrent)}`,
-      ],
-    }
-
-    setNotifications((prev) => [nextNotification, ...prev].slice(0, MAX_NOTIFICATION_HISTORY))
+    const activeDriverId = dashboard.driver_id || driverId || 'DRV001'
+    void refreshNotifications(activeDriverId)
   }
+
+  useEffect(() => {
+    const activeDriverId = driverId || 'DRV001'
+    void refreshNotifications(activeDriverId)
+    const interval = setInterval(() => {
+      void refreshNotifications(activeDriverId)
+    }, 60000)
+
+    return () => clearInterval(interval)
+  }, [driverId])
 
   useEffect(() => {
     if (!isShiftStarted) {
@@ -348,7 +319,7 @@ function Dashboard({ dailyTarget, isShiftStarted, isRideActive, setIsRideActive,
           smoothedStressScore={stressScore}
         />
 
-        <section className="grid gap-5 xl:grid-cols-[18%_55%_25%]">
+        <section className="grid gap-5 xl:grid-cols-[18%_56%_26%] xl:items-start">
           <Sidebar
             stats={liveDriverStats}
             onOpenConsole={() => setIsConsoleOverlayOpen(true)}
@@ -360,6 +331,7 @@ function Dashboard({ dailyTarget, isShiftStarted, isRideActive, setIsRideActive,
             driverId={driverId}
             onDashboardUpdate={handleDashboardUpdate}
           />
+          <NotificationPanel notifications={notifications.slice(0, MAX_NOTIFICATION_WIDGET_ITEMS)} />
         </section>
       </div>
 

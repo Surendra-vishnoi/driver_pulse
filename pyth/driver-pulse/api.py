@@ -143,6 +143,21 @@ class DriverDashboardData(BaseModel):
     shift_start_time: Optional[str]
 
 
+class NotificationItem(BaseModel):
+    """Dashboard notification item for quick driver insights."""
+    id: str
+    title: str
+    message: str
+    severity: str
+    timestamp: str
+
+
+class DriverNotificationsResponse(BaseModel):
+    """Recent notifications payload for dashboard notification widget."""
+    driver_id: str
+    notifications: List[NotificationItem]
+
+
 # ── Initialize FastAPI app ───────────────────────────────────
 
 app = FastAPI(
@@ -211,6 +226,92 @@ def _seed_driver_drv188() -> None:
 
 
 _seed_driver_drv188()
+
+
+def _map_pace_band_to_severity(pace_band: Optional[str]) -> str:
+    token = str(pace_band or "").lower()
+    if token in {"off_track", "at_risk", "critical", "behind"}:
+        return "warning"
+    if token in {"ahead", "on_track", "nominal"}:
+        return "success"
+    return "info"
+
+
+def _build_driver_notifications(driver_id: str) -> List[Dict[str, str]]:
+    """Build newest-first notifications and include backend-side fallback seed items."""
+    now = datetime.now()
+    notifications: List[Dict[str, str]] = []
+
+    metrics = tracker.get_driver_metrics(driver_id) if driver_id in tracker.driver_earnings else {}
+    pace_band = metrics.get("pace_band") if isinstance(metrics, dict) else None
+    driver_message = metrics.get("driver_message") if isinstance(metrics, dict) else None
+
+    if driver_message:
+        notifications.append(
+            {
+                "id": f"pace-{driver_id}-{int(now.timestamp())}",
+                "title": "Pace Guidance",
+                "message": str(driver_message),
+                "severity": _map_pace_band_to_severity(pace_band),
+                "timestamp": now.isoformat(),
+            }
+        )
+
+    driver_trips = [t for t in tracker.trips_log if t.get("driver_id") == driver_id]
+    if driver_trips:
+        last_trip = driver_trips[-1]
+        trip_earnings = float(last_trip.get("trip_earnings", 0) or 0)
+        notifications.append(
+            {
+                "id": f"trip-{last_trip.get('trip_id', 'recent')}",
+                "title": "Recent Trip Logged",
+                "message": f"Last trip added Rs {round(trip_earnings)} to your shift earnings.",
+                "severity": "success",
+                "timestamp": str(last_trip.get("timestamp") or now.isoformat()),
+            }
+        )
+
+    fallback = [
+        {
+            "id": f"seed-{driver_id}-1",
+            "title": "Demand Pulse",
+            "message": "Demand is steady. Prefer short-city rides to keep hourly velocity stable.",
+            "severity": "info",
+            "timestamp": (now - timedelta(minutes=1)).isoformat(),
+        },
+        {
+            "id": f"seed-{driver_id}-2",
+            "title": "Safety Watch",
+            "message": "Smooth braking will improve safety trend and reduce stress spikes.",
+            "severity": "warning",
+            "timestamp": (now - timedelta(minutes=4)).isoformat(),
+        },
+        {
+            "id": f"seed-{driver_id}-3",
+            "title": "Earnings Track",
+            "message": "Current pace is healthy for your target window. Keep acceptance consistent.",
+            "severity": "success",
+            "timestamp": (now - timedelta(minutes=8)).isoformat(),
+        },
+        {
+            "id": f"seed-{driver_id}-4",
+            "title": "Shift Snapshot",
+            "message": "Mid-shift efficiency is stable with balanced trip duration and fare mix.",
+            "severity": "info",
+            "timestamp": (now - timedelta(minutes=12)).isoformat(),
+        },
+        {
+            "id": f"seed-{driver_id}-5",
+            "title": "Zone Tip",
+            "message": "Watch surge pockets in adjacent zones for better earnings per kilometer.",
+            "severity": "info",
+            "timestamp": (now - timedelta(minutes=18)).isoformat(),
+        },
+    ]
+
+    notifications.extend(fallback)
+    notifications.sort(key=lambda row: str(row.get("timestamp") or ""), reverse=True)
+    return notifications
 
 logger.info("✅ FastAPI app initialized")
 
@@ -448,6 +549,21 @@ async def get_driver_dashboard_data(driver_id: str):
         raise
     except Exception as e:
         logger.error(f"Error getting dashboard for {driver_id}: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/drivers/{driver_id}/notifications/recent", tags=["Dashboard"], response_model=DriverNotificationsResponse)
+async def get_driver_notifications(driver_id: str, limit: int = 4):
+    """Return newest notifications for dashboard right-side panel, with backend fallback entries."""
+    try:
+        safe_limit = max(1, min(limit, 200))
+        notifications = _build_driver_notifications(driver_id)
+        return {
+            "driver_id": driver_id,
+            "notifications": notifications[:safe_limit],
+        }
+    except Exception as e:
+        logger.error(f"Error getting notifications for {driver_id}: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 

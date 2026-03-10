@@ -7,15 +7,8 @@
 [33m[nodemon] watching path(s): *.*[39m
 [33m[nodemon] watching extensions: js,mjs,cjs,json[39m
 [32m[nodemon] starting `node index.js`[39m
-[dotenv@17.3.1] injecting env (0) from .env -- tip: ⚙️  specify custom .env file path with { path: '/custom/path/.env' }
-MongoDB connected.
+[dotenv@17.3.1] injecting env (0) from .env -- tip: ⚙️  load multiple .env files with { path: ['.env.local', '.env'] }
+Connecting to MongoDB: Using local fallback
 Server running on port 5000
-[31m[nodemon] app crashed - waiting for file changes before starting...[39m
-[32m[nodemon] restarting child process[39m
-[32m[nodemon] starting `node index.js`[39m
-[dotenv@17.3.1] injecting env (0) from .env -- tip: 🔐 encrypt with Dotenvx: https://dotenvx.com
-MongoDB connected.
-Server running on port 5000
-://dotenvx.com/precommit
-MongoDB connected.
-Server running on port 5000
+MongoDB connected
+[Ride End Meta] rideId=RIDE-1773136337260-481 driverId=DRV188 alerts=0

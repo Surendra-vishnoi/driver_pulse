@@ -1,7 +1,7 @@
 function Header({ dailyTarget, isRideActive, onToggleRide, rideId, smoothedStressScore }) {
   const formattedTarget = new Intl.NumberFormat('en-US', {
     style: 'currency',
-    currency: 'USD',
+    currency: 'INR',
     maximumFractionDigits: 0,
   }).format(dailyTarget ?? 1000)
 
