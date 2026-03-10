@@ -29,7 +29,7 @@ Key differentiators: real‑time pace scoring with 4‑signal model, edge sensor
 
 ## Deployment & Production
 
-- The current public URL is deployed on Render at `driver-pulse-n8vq.onrender.com`.
+- The current public URL is deployed on Render at [driver-pulse-n8vq.onrender.com](https://driver-pulse-n8vq.onrender.com).
 - Deployment uses a Dockerfile combining Node service + built React app; Python API runs separately (e.g. via `uvicorn` container or Render web service).
 - For production, ensure `MONGO_URI` points to a managed database and secure environment variables.
 
